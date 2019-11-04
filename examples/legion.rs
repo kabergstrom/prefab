@@ -74,8 +74,6 @@ struct RegisteredComponent {
 
 struct InnerWorld {
     world: legion::world::World,
-    cmd_buffer: legion::command::CommandBuffer,
-    current_entity: Option<legion::entity::Entity>,
     entity_map: HashMap<EntityUuid, legion::entity::Entity>,
     registered_components: HashMap<ComponentTypeUuid, RegisteredComponent>,
 }
@@ -88,14 +86,9 @@ impl prefab::StorageDeserializer for &World {
     fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {
         let mut this = self.inner.borrow_mut();
         let new_entity = this.world.insert((), vec![()])[0];
-        this.current_entity = Some(new_entity);
         this.entity_map.insert(*entity, new_entity);
     }
-    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {
-        let mut this = &mut *self.inner.borrow_mut();
-        this.current_entity = None;
-        // this.cmd_buffer.write(&mut this.world);
-    }
+    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
     fn deserialize_component<'de, D: Deserializer<'de>>(
         &self,
         prefab: &PrefabUuid,
@@ -109,7 +102,10 @@ impl prefab::StorageDeserializer for &World {
             .registered_components
             .get(component_type)
             .expect("failed to find component type");
-        let entity = this.current_entity.expect("no current_entity");
+        let entity = *this
+            .entity_map
+            .get(entity)
+            .expect("could not find prefab ref entity");
         (registered.deserialize_fn)(
             &mut erased_serde::Deserializer::erase(deserializer),
             &mut this.world,
@@ -174,14 +170,10 @@ fn read_prefab(text: &str, world: &World) {
 
 fn main() {
     let universe = legion::world::Universe::new();
-    let mut cmd_buffer = legion::command::CommandBuffer::default();
-    cmd_buffer.block = Some(universe.allocator.lock().allocate());
     use std::iter::FromIterator;
     let world = World {
         inner: RefCell::new(InnerWorld {
             world: universe.create_world(),
-            cmd_buffer,
-            current_entity: None,
             entity_map: HashMap::new(),
             registered_components: HashMap::from_iter(vec![(
                 Transform::UUID,
@@ -191,6 +183,9 @@ fn main() {
                             .expect("failed to deserialize transform");
                         println!("deserialized {:#?}", comp);
                         world.add_component(entity, comp);
+                        let mut comp = world
+                            .get_component_mut::<Transform>(entity)
+                            .expect("expected component data when diffing");
                     },
                     apply_diff: |d, world, entity| {
                         let mut comp = world
