@@ -96,10 +96,5 @@ fn main() {
     let world = World {
         transform: RefCell::new(None),
     };
-    let prefab_deserializer = prefab::PrefabDeserializer { storage: &world };
-    <prefab::PrefabDeserializer<World> as serde::de::DeserializeSeed>::deserialize(
-        prefab_deserializer,
-        &mut deserializer,
-    )
-    .unwrap();
+    prefab::Prefab::deserialize(&mut deserializer, &world).unwrap();
 }
