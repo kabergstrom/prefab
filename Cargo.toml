@@ -9,10 +9,11 @@ edition = "2018"
 [dependencies]
 serde-diff = { version = "0.1", git = "https://github.com/aclysma/struct-diff" }
 type-uuid = "0.1"
-linkme = "0.1"
 serde = { version = "1.0", features = [ "derive" ] }
 uuid = { version = "0.8", features = [ "serde" ] }
 
 
 [dev-dependencies]
 ron = "0.5"
+legion = { path = "../legion" }
+linkme = "0.1"
