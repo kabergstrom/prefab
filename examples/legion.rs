@@ -13,58 +13,6 @@ struct Transform {
     scale: Vec<f32>,
 }
 
-struct ComponentMetadata {
-    id: legion::storage::ComponentTypeId,
-    comp_meta: legion::storage::ComponentMeta,
-    data_pos: usize,
-}
-struct TagMetadata {
-    id: legion::storage::TagTypeId,
-    tag_meta: legion::storage::TagMeta,
-    data_pos: usize,
-}
-
-struct EntityCreator {
-    components: Vec<ComponentMetadata>,
-    tags: Vec<TagMetadata>,
-    data: Vec<u8>,
-}
-impl EntityCreator {
-    pub fn add_component<T: legion::storage::Component>(&mut self, val: T) {
-        let meta = legion::storage::ComponentMeta::of::<T>();
-        let data_pos = self.add_data(val, meta.size);
-        self.components.push(ComponentMetadata {
-            id: legion::storage::ComponentTypeId::of::<T>(),
-            comp_meta: meta,
-            data_pos,
-        });
-    }
-    pub fn add_tag<T: legion::storage::Tag>(&mut self, val: T) {
-        let meta = legion::storage::TagMeta::of::<T>();
-        let data_pos = self.add_data(val, meta.size);
-        self.tags.push(TagMetadata {
-            id: legion::storage::TagTypeId::of::<T>(),
-            tag_meta: meta,
-            data_pos,
-        });
-    }
-    fn add_data<T>(&mut self, val: T, size: usize) -> usize {
-        let current_pos = self.data.len();
-        let remaining_space = self.data.capacity() - current_pos;
-        let needed_capacity = size.saturating_sub(remaining_space);
-        if needed_capacity > 0 {
-            self.data.reserve(needed_capacity);
-        }
-        unsafe {
-            let dst = self.data.as_mut_ptr().offset(current_pos as isize);
-            std::ptr::write_unaligned(dst.cast(), &val as *const T);
-            self.data.set_len(current_pos + size);
-            std::mem::forget(val);
-        }
-        current_pos
-    }
-}
-
 struct RegisteredComponent {
     deserialize_fn:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
@@ -205,4 +153,5 @@ fn main() {
         }),
     };
     read_prefab(PREFABS[0].1, &world);
+    println!("done!");
 }
