@@ -1,9 +1,44 @@
-use crate::{ComponentTypeUuid, EntityUuid, Prefab, PrefabUuid, Storage};
+use crate::{ComponentTypeUuid, EntityUuid, Prefab, PrefabUuid};
 use serde::{
     de::{self, DeserializeSeed, Visitor},
-    ser, Deserialize, Deserializer, Serialize,
+    Deserialize, Deserializer,
 };
-use type_uuid::TypeUuid;
+pub trait Storage {
+    /// Called when the deserializer encounters an entity object.
+    /// Ideally used to start buffering component data for an entity.
+    fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid);
+    /// Called when the deserializer finishes with an entity object.
+    /// Ideally finishes buffered storage operations for an entity.
+    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid);
+    /// Called when the deserializer encounters component data.
+    /// The Storage implementation must handle deserialization of the data,
+    /// using the ComponentTypeUuid to identify the type to deserialize as.
+    fn deserialize_component<'de, D: Deserializer<'de>>(
+        &self,
+        prefab: &PrefabUuid,
+        entity: &EntityUuid,
+        component_type: &ComponentTypeUuid,
+        deserializer: D,
+    ) -> Result<(), D::Error>;
+    /// Called when the deserializer encounters a prefab reference.
+    /// The Storage implementation should probably ensure that the referenced prefab
+    /// is loaded since this call will most likely be followed by `apply_component_diff` calls.
+    /// Alternatively, the implementation can use serde-transcode to save the diff for later.
+    fn begin_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid);
+    /// Called when the deserializer is finished with a prefab reference.
+    fn end_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid);
+    /// Called when the deserializer encounters a component diff for a prefab reference.
+    /// The Storage implementation must handle deserialization of the diff,
+    /// using the ComponentTypeUuid to identify the type to deserialize as.
+    fn apply_component_diff<'de, D: Deserializer<'de>>(
+        &self,
+        parent_prefab: &PrefabUuid,
+        prefab_ref: &PrefabUuid,
+        entity: &EntityUuid,
+        component_type: &ComponentTypeUuid,
+        deserializer: D,
+    ) -> Result<(), D::Error>;
+}
 struct ComponentOverrideData<'a, S: Storage> {
     pub storage: &'a S,
     pub parent_id: PrefabUuid,
@@ -210,13 +245,17 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
                             prefab_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
                         }
                         PrefabRefField::EntityOverrides => {
+                            let prefab_ref_id = prefab_id.ok_or(de::Error::missing_field(
+                                "component type must be serialized before data",
+                            ))?;
+                            self.storage
+                                .begin_prefab_ref(&self.parent_id, &prefab_ref_id);
                             map.next_value_seed(SeqDeserializer(EntityOverride {
                                 parent_id: self.parent_id,
-                                prefab_ref_id: prefab_id.ok_or(de::Error::missing_field(
-                                    "component type must be serialized before data",
-                                ))?,
+                                prefab_ref_id,
                                 storage: self.storage,
                             }))?;
+                            self.storage.end_prefab_ref(&self.parent_id, &prefab_ref_id);
                             return Ok(());
                         }
                     }
@@ -375,13 +414,20 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
                             entity_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
                         }
                         EntityPrefabObjectField::Components => {
+                            let entity_id = entity_id.ok_or(de::Error::missing_field(
+                                "entity id must be serialized before components",
+                            ))?;
+                            self.0
+                                .storage
+                                .begin_entity_object(&self.0.prefab_id, &entity_id);
                             map.next_value_seed(SeqDeserializer(EntityComponent {
                                 prefab_id: self.0.prefab_id,
-                                entity_id: entity_id.ok_or(de::Error::missing_field(
-                                    "entity id must be serialized before components",
-                                ))?,
+                                entity_id,
                                 storage: self.0.storage,
                             }))?;
+                            self.0
+                                .storage
+                                .end_entity_object(&self.0.prefab_id, &entity_id);
                             return Ok(self.0);
                         }
                     }

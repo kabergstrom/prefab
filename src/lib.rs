@@ -1,15 +1,12 @@
-use serde::{
-    de::{self, DeserializeSeed, Visitor},
-    ser, Deserialize, Deserializer, Serialize,
-};
-use type_uuid::TypeUuid;
+use serde::Deserializer;
 mod deserialize;
+pub use deserialize::Storage as StorageDeserializer;
 pub type PrefabUuid = uuid::Bytes;
 pub type EntityUuid = uuid::Bytes;
 pub type ComponentTypeUuid = type_uuid::Bytes;
 pub struct Prefab {}
 impl Prefab {
-    pub fn deserialize<'de, 'a: 'de, D: Deserializer<'de>, S: Storage>(
+    pub fn deserialize<'de, 'a: 'de, D: Deserializer<'de>, S: StorageDeserializer>(
         deserializer: D,
         storage: &'a S,
     ) -> Result<Prefab, D::Error> {
@@ -19,27 +16,4 @@ impl Prefab {
             deserializer,
         )
     }
-}
-
-pub trait Storage {
-    fn deserialize_component<'de, D: Deserializer<'de>>(
-        &self,
-        prefab: &PrefabUuid,
-        entity: &EntityUuid,
-        component_type: &ComponentTypeUuid,
-        deserializer: D,
-    ) -> Result<(), D::Error>;
-    fn add_prefab_ref<'de, D: Deserializer<'de>>(
-        &self,
-        prefab: &PrefabUuid,
-        target_prefab: &PrefabUuid,
-    );
-    fn apply_component_diff<'de, D: Deserializer<'de>>(
-        &self,
-        parent_prefab: &PrefabUuid,
-        prefab_ref: &PrefabUuid,
-        entity: &EntityUuid,
-        component_type: &ComponentTypeUuid,
-        deserializer: D,
-    ) -> Result<(), D::Error>;
 }
