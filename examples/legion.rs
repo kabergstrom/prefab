@@ -131,15 +131,12 @@ fn main() {
                             .expect("failed to deserialize transform");
                         println!("deserialized {:#?}", comp);
                         world.add_component(entity, comp);
-                        let mut comp = world
-                            .get_component_mut::<Transform>(entity)
-                            .expect("expected component data when diffing");
                     },
                     apply_diff: |d, world, entity| {
                         let mut comp = world
                             .get_component_mut::<Transform>(entity)
                             .expect("expected component data when diffing");
-                        let mut comp: &mut Transform = &mut *comp;
+                        let comp: &mut Transform = &mut *comp;
                         println!("before diff {:#?}", comp);
                         <serde_diff::Apply<Transform> as serde::de::DeserializeSeed>::deserialize(
                             serde_diff::Apply::deserializable(comp),
