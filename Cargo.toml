@@ -17,3 +17,5 @@ uuid = { version = "0.8", features = [ "serde" ] }
 ron = "0.5"
 legion = { path = "../legion" }
 linkme = "0.1"
+erased-serde = "0.3"
+atelier-core = { path = "../atelier-assets/core" }
