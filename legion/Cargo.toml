@@ -1,0 +1,17 @@
+[package]
+name = "legion-prefab"
+version = "0.1.0"
+authors = ["Karl Bergström <karl.anton.bergstrom@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+prefab-format = { path = "../format" }
+serde = { version = "1", default-features = false, features = [ "derive" ] }
+erased-serde = "0.3"
+legion = { path = "../../legion", default-features = false, features = ["serde-1"] }
+inventory = "0.1"
+type-uuid = "0.1"
+uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
+serde-transcode = "1.1.0"
+serde-diff = "0.1"
+serde_json = "1.0"

@@ -26,7 +26,7 @@ pub const PREFAB2: &str = r#"Prefab(
     id: "14dec17f-ae14-40a3-8e44-e487fc423287",
     objects: [
         // Inline definition of an entity and its components
-        Entity(Entity(
+        Entity((
              // Entity AssetUuid
              id: "62b3dbd1-56a8-469e-a262-41a66321da8b",
              // Component data and types
@@ -35,8 +35,25 @@ pub const PREFAB2: &str = r#"Prefab(
                      // Component AssetTypeId
                      type: "d4b83227-d3f8-47f5-b026-db615fb41d31",
                      data: (
+                         value: 8,
                          translation: [0.0, 0.0, 5.0],
                          scale: [2.0, 2.0, 2.0]
+                     ),
+                 ),
+             ]
+        )),
+        Entity((
+             // Entity AssetUuid
+             id: "df6df3fd-4a0c-4640-bd71-7969f1e568a1",
+             // Component data and types
+             components: [
+                 (
+                     // Component AssetTypeId
+                     type: "d4b83227-d3f8-47f5-b026-db615fb41d31",
+                     data: (
+                         value: 2,
+                         translation: [7.0, 7.0, 7.0],
+                         scale: [8.0, 8.0, 8.0]
                      ),
                  ),
              ]

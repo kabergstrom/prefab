@@ -1,14 +1,17 @@
 use atelier_core::asset_uuid;
-use prefab::{ComponentTypeUuid, EntityUuid, Prefab, PrefabUuid, StorageDeserializer};
+use prefab_format::{ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer};
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_diff::{Apply, SerdeDiff};
+use serde_diff::SerdeDiff;
 use std::{cell::RefCell, collections::HashMap};
 use type_uuid::TypeUuid;
-mod prefab_sample;
+mod prefab_sample {
+    include!("prefab_sample.rs.inc");
+}
 
 #[derive(SerdeDiff, TypeUuid, Serialize, Deserialize, Debug, Clone)]
 #[uuid = "d4b83227-d3f8-47f5-b026-db615fb41d31"]
 struct Transform {
+    value: u32,
     translation: Vec<f32>,
     scale: Vec<f32>,
 }
@@ -30,7 +33,7 @@ struct World {
     inner: RefCell<InnerWorld>,
 }
 
-impl prefab::StorageDeserializer for &World {
+impl prefab_format::StorageDeserializer for &World {
     fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {
         let mut this = self.inner.borrow_mut();
         let new_entity = this.world.insert((), vec![()])[0];
@@ -113,7 +116,7 @@ const PREFABS: [(PrefabUuid, &'static str); 2] = [
 fn read_prefab(text: &str, world: &World) {
     let mut deserializer = ron::de::Deserializer::from_bytes(text.as_bytes()).unwrap();
 
-    prefab::Prefab::deserialize(&mut deserializer, &world).unwrap();
+    prefab_format::deserialize(&mut deserializer, &world).unwrap();
 }
 
 fn main() {

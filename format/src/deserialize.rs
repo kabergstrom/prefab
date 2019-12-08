@@ -1,4 +1,4 @@
-use crate::{ComponentTypeUuid, EntityUuid, Prefab, PrefabUuid};
+use crate::{ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{
     de::{self, DeserializeSeed, Visitor},
     Deserialize, Deserializer,
@@ -103,7 +103,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverride<'a, S> {
             where
                 V: de::MapAccess<'de>,
             {
-                println!("visit map component override");
                 let mut component_type_id = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -132,7 +131,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverride<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        println!("deserialize component override");
         const FIELDS: &'static [&'static str] = &["component_type", "diff"];
         deserializer.deserialize_struct("ComponentOverride", FIELDS, self)
     }
@@ -175,7 +173,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityOverride<'a, S> {
             where
                 V: de::MapAccess<'de>,
             {
-                println!("visit map entity override");
                 let mut entity_id = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -201,7 +198,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityOverride<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        println!("deserialize entity override");
         const FIELDS: &'static [&'static str] = &["prefab_id", "component_overrides"];
         deserializer.deserialize_struct("PrefabRef", FIELDS, self)
     }
@@ -234,7 +230,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
             where
                 V: de::MapAccess<'de>,
             {
-                println!("visit map prefab ref");
                 let mut prefab_id = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -263,7 +258,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        println!("deserialize prefab ref");
         const FIELDS: &'static [&'static str] = &["prefab_id", "entity_overrides"];
         deserializer.deserialize_struct("PrefabRef", FIELDS, self)
     }
@@ -324,14 +318,14 @@ impl<'a, S: Storage> Clone for EntityComponent<'a, S> {
     }
 }
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
-    type Value = Prefab;
+    type Value = ();
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for EntityComponent<'a, S> {
-            type Value = Prefab;
+            type Value = ();
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("struct Entity")
@@ -351,7 +345,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
                             component_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
                         }
                         ComponentField::Data => {
-                            println!("deserialize component data");
                             map.next_value_seed(EntityComponentData {
                                 storage: self.storage,
                                 prefab_id: self.prefab_id,
@@ -360,14 +353,13 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
                                     "component type must be serialized before data",
                                 ))?,
                             })?;
-                            return Ok(Prefab {});
+                            return Ok(());
                         }
                     }
                 }
                 Err(de::Error::missing_field("data"))
             }
         }
-        println!("deserialize struct");
         const FIELDS: &'static [&'static str] = &["id", "components"];
         deserializer.deserialize_struct("Entity", FIELDS, self)
     }
@@ -403,7 +395,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
             where
                 V: de::MapAccess<'de>,
             {
-                println!("visit map entity prefab");
                 let mut entity_id = None;
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -435,7 +426,6 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
                 Err(de::Error::missing_field("components"))
             }
         }
-        println!("deserialize entity prefab");
         const FIELDS: &'static [&'static str] = &["id", "components"];
         deserializer.deserialize_struct("Entity", FIELDS, self)
     }
@@ -477,7 +467,6 @@ impl<'a, 'de, S: Storage> Visitor<'de> for PrefabObjectDeserializer<'a, S> {
                 Ok(())
             }
             (ObjectVariant::PrefabRef, variant) => {
-                println!("got prefab ref ");
                 de::VariantAccess::newtype_variant_seed::<PrefabRef<S>>(
                     variant,
                     PrefabRef {
@@ -493,7 +482,7 @@ impl<'a, 'de, S: Storage> Visitor<'de> for PrefabObjectDeserializer<'a, S> {
 pub struct SeqDeserializer<T>(T);
 
 impl<'de, T: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SeqDeserializer<T> {
-    type Value = Prefab;
+    type Value = ();
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -503,7 +492,7 @@ impl<'de, T: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SeqDeseriali
     }
 }
 impl<'de, T: DeserializeSeed<'de> + Clone> Visitor<'de> for SeqDeserializer<T> {
-    type Value = Prefab;
+    type Value = ();
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("sequence of objects")
@@ -513,7 +502,7 @@ impl<'de, T: DeserializeSeed<'de> + Clone> Visitor<'de> for SeqDeserializer<T> {
         A: de::SeqAccess<'de>,
     {
         while let Some(_) = seq.next_element_seed::<T>(self.0.clone())? {}
-        Ok(Prefab {})
+        Ok(())
     }
 }
 
@@ -521,7 +510,7 @@ pub struct PrefabDeserializer<'a, S: Storage> {
     pub storage: &'a S,
 }
 impl<'de, 'a: 'de, S: Storage> DeserializeSeed<'de> for PrefabDeserializer<'a, S> {
-    type Value = Prefab;
+    type Value = ();
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -539,7 +528,7 @@ enum PrefabField {
     Objects,
 }
 impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
-    type Value = Prefab;
+    type Value = ();
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("struct Prefab")
@@ -549,7 +538,6 @@ impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
     where
         V: de::MapAccess<'de>,
     {
-        println!("visit map");
         let mut prefab_id = None;
         let mut prefab = None;
         while let Some(key) = map.next_key()? {
@@ -559,7 +547,6 @@ impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
                         return Err(de::Error::duplicate_field("id"));
                     }
                     prefab_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
-                    println!("prefab id {:?}", prefab_id);
                 }
                 PrefabField::Objects => {
                     prefab = Some(map.next_value_seed(SeqDeserializer(

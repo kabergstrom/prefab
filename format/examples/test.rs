@@ -1,9 +1,11 @@
-use prefab::{ComponentTypeUuid, EntityUuid, Prefab, PrefabUuid, StorageDeserializer};
+use prefab_format::{self, ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_diff::{Apply, SerdeDiff};
 use std::cell::RefCell;
 use type_uuid::TypeUuid;
-mod prefab_sample;
+mod prefab_sample {
+    include!("prefab_sample.rs.inc");
+}
 
 #[derive(SerdeDiff, TypeUuid, Serialize, Deserialize, Debug, Clone)]
 #[uuid = "d4b83227-d3f8-47f5-b026-db615fb41d31"]
@@ -16,7 +18,7 @@ struct World {
     transform: RefCell<Option<Transform>>,
 }
 
-impl prefab::StorageDeserializer for World {
+impl prefab_format::StorageDeserializer for World {
     fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
     fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
     fn deserialize_component<'de, D: Deserializer<'de>>(
@@ -53,9 +55,9 @@ impl prefab::StorageDeserializer for World {
 
 fn main() {
     let mut deserializer =
-        ron::de::Deserializer::from_bytes(prefab_sample::TEXT.as_bytes()).unwrap();
+        ron::de::Deserializer::from_bytes(prefab_sample::PREFAB2.as_bytes()).unwrap();
     let world = World {
         transform: RefCell::new(None),
     };
-    prefab::Prefab::deserialize(&mut deserializer, &world).unwrap();
+    prefab_format::deserialize(&mut deserializer, &world).unwrap();
 }
