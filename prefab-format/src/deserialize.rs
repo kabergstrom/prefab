@@ -117,11 +117,11 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverride<'a, S> {
                                 parent_id: self.parent_id,
                                 prefab_ref_id: self.prefab_ref_id,
                                 entity_id: self.entity_id,
-                                component_type_id: component_type_id.ok_or(
+                                component_type_id: component_type_id.ok_or_else(|| {
                                     de::Error::missing_field(
                                         "component_type must be serialized before diff",
-                                    ),
-                                )?,
+                                    )
+                                })?,
                                 storage: self.storage,
                             })?;
                             return Ok(());
@@ -131,7 +131,7 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverride<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        const FIELDS: &'static [&'static str] = &["component_type", "diff"];
+        const FIELDS: &[&str] = &["component_type", "diff"];
         deserializer.deserialize_struct("ComponentOverride", FIELDS, self)
     }
 }
@@ -186,9 +186,11 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityOverride<'a, S> {
                             map.next_value_seed(SeqDeserializer(ComponentOverride {
                                 parent_id: self.parent_id,
                                 prefab_ref_id: self.prefab_ref_id,
-                                entity_id: entity_id.ok_or(de::Error::missing_field(
-                                    "entity_id must be serialized before component_overrides",
-                                ))?,
+                                entity_id: entity_id.ok_or_else(|| {
+                                    de::Error::missing_field(
+                                        "entity_id must be serialized before component_overrides",
+                                    )
+                                })?,
                                 storage: self.storage,
                             }))?;
                             return Ok(());
@@ -198,7 +200,7 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityOverride<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        const FIELDS: &'static [&'static str] = &["prefab_id", "component_overrides"];
+        const FIELDS: &[&str] = &["prefab_id", "component_overrides"];
         deserializer.deserialize_struct("PrefabRef", FIELDS, self)
     }
 }
@@ -240,9 +242,11 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
                             prefab_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
                         }
                         PrefabRefField::EntityOverrides => {
-                            let prefab_ref_id = prefab_id.ok_or(de::Error::missing_field(
-                                "component type must be serialized before data",
-                            ))?;
+                            let prefab_ref_id = prefab_id.ok_or_else(|| {
+                                de::Error::missing_field(
+                                    "component type must be serialized before data",
+                                )
+                            })?;
                             self.storage
                                 .begin_prefab_ref(&self.parent_id, &prefab_ref_id);
                             map.next_value_seed(SeqDeserializer(EntityOverride {
@@ -258,7 +262,7 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
                 Err(de::Error::missing_field("component_overrides"))
             }
         }
-        const FIELDS: &'static [&'static str] = &["prefab_id", "entity_overrides"];
+        const FIELDS: &[&str] = &["prefab_id", "entity_overrides"];
         deserializer.deserialize_struct("PrefabRef", FIELDS, self)
     }
 }
@@ -349,9 +353,11 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
                                 storage: self.storage,
                                 prefab_id: self.prefab_id,
                                 entity_id: self.entity_id,
-                                component_id: component_id.ok_or(de::Error::missing_field(
-                                    "component type must be serialized before data",
-                                ))?,
+                                component_id: component_id.ok_or_else(|| {
+                                    de::Error::missing_field(
+                                        "component type must be serialized before data",
+                                    )
+                                })?,
                             })?;
                             return Ok(());
                         }
@@ -360,8 +366,8 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
                 Err(de::Error::missing_field("data"))
             }
         }
-        const FIELDS: &'static [&'static str] = &["id", "components"];
-        deserializer.deserialize_struct("Entity", FIELDS, self)
+        const FIELDS: &[&str] = &["id", "components"];
+        deserializer.deserialize_struct("EntityComponent", FIELDS, self)
     }
 }
 
@@ -405,9 +411,11 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
                             entity_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
                         }
                         EntityPrefabObjectField::Components => {
-                            let entity_id = entity_id.ok_or(de::Error::missing_field(
-                                "entity id must be serialized before components",
-                            ))?;
+                            let entity_id = entity_id.ok_or_else(|| {
+                                de::Error::missing_field(
+                                    "entity id must be serialized before components",
+                                )
+                            })?;
                             self.0
                                 .storage
                                 .begin_entity_object(&self.0.prefab_id, &entity_id);
@@ -426,8 +434,8 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
                 Err(de::Error::missing_field("components"))
             }
         }
-        const FIELDS: &'static [&'static str] = &["id", "components"];
-        deserializer.deserialize_struct("Entity", FIELDS, self)
+        const FIELDS: &[&str] = &["id", "components"];
+        deserializer.deserialize_struct("PrefabEntity", FIELDS, self)
     }
 }
 
@@ -438,7 +446,7 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabObjectDeserializer<'a, 
     where
         D: Deserializer<'de>,
     {
-        const VARIANTS: &'static [&'static str] = &["Entity", "PrefabRef"];
+        const VARIANTS: &[&str] = &["Entity", "PrefabRef"];
         deserializer.deserialize_enum("PrefabObject", VARIANTS, self)
     }
 }
@@ -516,7 +524,7 @@ impl<'de, 'a: 'de, S: Storage> DeserializeSeed<'de> for PrefabDeserializer<'a, S
     where
         D: Deserializer<'de>,
     {
-        const FIELDS: &'static [&'static str] = &["id", "objects"];
+        const FIELDS: &[&str] = &["id", "objects"];
         deserializer.deserialize_struct("Prefab", FIELDS, self)
     }
 }
@@ -551,15 +559,17 @@ impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
                 PrefabField::Objects => {
                     prefab = Some(map.next_value_seed(SeqDeserializer(
                         PrefabObjectDeserializer {
-                            prefab_id: prefab_id.ok_or(de::Error::missing_field(
-                                "prefab ID must be serialized before prefab objects",
-                            ))?,
+                            prefab_id: prefab_id.ok_or_else(|| {
+                                de::Error::missing_field(
+                                    "prefab ID must be serialized before prefab objects",
+                                )
+                            })?,
                             storage: self.storage,
                         },
                     ))?);
                 }
             }
         }
-        prefab.ok_or(de::Error::missing_field("objects"))
+        prefab.ok_or_else(|| de::Error::missing_field("objects"))
     }
 }

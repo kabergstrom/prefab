@@ -1,4 +1,4 @@
-use prefab_format::{self, ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer};
+use prefab_format::{self, ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_diff::{Apply, SerdeDiff};
 use std::cell::RefCell;
@@ -19,13 +19,23 @@ struct World {
 }
 
 impl prefab_format::StorageDeserializer for World {
-    fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
-    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
+    fn begin_entity_object(
+        &self,
+        _prefab: &PrefabUuid,
+        _entity: &EntityUuid,
+    ) {
+    }
+    fn end_entity_object(
+        &self,
+        _prefab: &PrefabUuid,
+        _entity: &EntityUuid,
+    ) {
+    }
     fn deserialize_component<'de, D: Deserializer<'de>>(
         &self,
-        prefab: &PrefabUuid,
-        entity: &EntityUuid,
-        component_type: &ComponentTypeUuid,
+        _prefab: &PrefabUuid,
+        _entity: &EntityUuid,
+        _component_type: &ComponentTypeUuid,
         deserializer: D,
     ) -> Result<(), D::Error> {
         println!("deserializing transform");
@@ -33,14 +43,24 @@ impl prefab_format::StorageDeserializer for World {
         println!("deserialized {:?}", self.transform);
         Ok(())
     }
-    fn begin_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid) {}
-    fn end_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid) {}
+    fn begin_prefab_ref(
+        &self,
+        _prefab: &PrefabUuid,
+        _target_prefab: &PrefabUuid,
+    ) {
+    }
+    fn end_prefab_ref(
+        &self,
+        _prefab: &PrefabUuid,
+        _target_prefab: &PrefabUuid,
+    ) {
+    }
     fn apply_component_diff<'de, D: Deserializer<'de>>(
         &self,
-        parent_prefab: &PrefabUuid,
-        prefab_ref: &PrefabUuid,
-        entity: &EntityUuid,
-        component_type: &ComponentTypeUuid,
+        _parent_prefab: &PrefabUuid,
+        _prefab_ref: &PrefabUuid,
+        _entity: &EntityUuid,
+        _component_type: &ComponentTypeUuid,
         deserializer: D,
     ) -> Result<(), D::Error> {
         let mut transform = self.transform.borrow_mut();

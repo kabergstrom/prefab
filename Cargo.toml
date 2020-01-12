@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "legion",
-    "format",
+    "legion-prefab",
+    "prefab-format",
 ]

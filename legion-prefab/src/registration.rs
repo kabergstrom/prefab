@@ -1,5 +1,5 @@
 pub use inventory;
-use legion::storage::{ArchetypeDescription, ComponentResourceSet, TagStorage};
+use legion::storage::{ArchetypeDescription, ComponentMeta, ComponentResourceSet, TagStorage};
 use serde::{
     de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer, Serialize,
@@ -61,12 +61,15 @@ impl<'de, 'a, T: for<'b> Deserialize<'b> + 'static> Visitor<'de>
                 Some((storage_ptr, storage_len)) => {
                     let storage_ptr = storage_ptr.as_ptr() as *mut T;
                     for idx in 0..storage_len {
-                        let element_ptr = unsafe { storage_ptr.offset(idx as isize) };
+                        let element_ptr = unsafe { storage_ptr.add(idx) };
 
-                        if let None = seq.next_element_seed(ComponentDeserializer {
-                            ptr: element_ptr,
-                            _marker: PhantomData,
-                        })? {
+                        if seq
+                            .next_element_seed(ComponentDeserializer {
+                                ptr: element_ptr,
+                                _marker: PhantomData,
+                            })?
+                            .is_none()
+                        {
                             panic!(
                                 "expected {} elements in chunk but only {} found",
                                 storage_len, idx
@@ -75,7 +78,7 @@ impl<'de, 'a, T: for<'b> Deserialize<'b> + 'static> Visitor<'de>
                     }
                 }
                 None => {
-                    if let Some(_) = seq.next_element::<IgnoredAny>()? {
+                    if seq.next_element::<IgnoredAny>()?.is_some() {
                         panic!("unexpected element when there was no storage space available");
                     } else {
                         // No more elements and no more storage - that's what we want!
@@ -101,6 +104,14 @@ pub struct TagRegistration {
 }
 
 impl TagRegistration {
+    pub fn uuid(&self) -> &type_uuid::Bytes {
+        &self.uuid
+    }
+
+    pub fn ty(&self) -> TypeId {
+        self.ty
+    }
+
     pub fn of<
         T: TypeUuid
             + Serialize
@@ -141,6 +152,7 @@ impl TagRegistration {
 pub struct ComponentRegistration {
     pub(crate) uuid: type_uuid::Bytes,
     pub(crate) ty: TypeId,
+    pub(crate) meta: ComponentMeta,
     pub(crate) comp_serialize_fn:
         unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize)),
     pub(crate) comp_deserialize_fn: fn(
@@ -150,17 +162,65 @@ pub struct ComponentRegistration {
     pub(crate) register_comp_fn: fn(&mut ArchetypeDescription),
     pub(crate) deserialize_single_fn:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
+    pub(crate) serialize_single_fn: fn(
+        &legion::world::World,
+        legion::entity::Entity,
+        &mut dyn FnMut(&dyn erased_serde::Serialize),
+    ),
     pub(crate) apply_diff:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
+    pub(crate) comp_clone_fn: fn(*const u8, *mut u8, usize),
 }
 
 impl ComponentRegistration {
+    pub fn uuid(&self) -> &type_uuid::Bytes {
+        &self.uuid
+    }
+
+    pub fn ty(&self) -> TypeId {
+        self.ty
+    }
+
+    pub fn meta(&self) -> &ComponentMeta {
+        &self.meta
+    }
+
+    pub fn apply_diff(
+        &self,
+        de: &mut dyn erased_serde::Deserializer,
+        world: &mut legion::world::World,
+        entity: legion::entity::Entity,
+    ) {
+        (self.apply_diff)(de, world, entity);
+    }
+
+    pub unsafe fn clone_components(&self, src: *const u8, dst: *mut u8, num_components: usize) {
+        (self.comp_clone_fn)(src, dst, num_components);
+    }
+
+    pub fn serialize(
+        &self,
+        world: &legion::world::World,
+        entity: legion::entity::Entity,
+        serialize: &mut dyn FnMut(&dyn erased_serde::Serialize),
+    ) {
+        (self.serialize_single_fn)(world, entity, serialize);
+    }
+
     pub fn of<
-        T: TypeUuid + Serialize + SerdeDiff + for<'de> Deserialize<'de> + Send + Sync + 'static,
+        T: TypeUuid
+            + Clone
+            + Serialize
+            + SerdeDiff
+            + for<'de> Deserialize<'de>
+            + Send
+            + Sync
+            + 'static,
     >() -> Self {
         Self {
             uuid: T::UUID,
             ty: TypeId::of::<T>(),
+            meta: ComponentMeta::of::<T>(),
             comp_serialize_fn: |comp_storage, serialize_fn| unsafe {
                 let slice = comp_storage.data_slice::<T>();
                 serialize_fn(&*slice);
@@ -182,6 +242,12 @@ impl ComponentRegistration {
                     erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
                 world.add_component(entity, comp);
             },
+            serialize_single_fn: |world, entity, s_fn| {
+                let comp = world
+                    .get_component::<T>(entity)
+                    .expect("entity not present when serializing component");
+                s_fn(&*comp)
+            },
             apply_diff: |d, world, entity| {
                 // TODO propagate error
                 let mut comp = world
@@ -194,12 +260,26 @@ impl ComponentRegistration {
                 )
                 .expect("failed to deserialize diff");
             },
+            comp_clone_fn: |src, dst, num_components| unsafe {
+                for i in 0..num_components {
+                    let src_ptr = (src as *const T).add(i);
+                    let dst_ptr = (dst as *mut T).add(i);
+                    std::ptr::write(dst_ptr, <T as Clone>::clone(&*src_ptr));
+                }
+            },
         }
     }
 }
 
 inventory::collect!(TagRegistration);
 inventory::collect!(ComponentRegistration);
+
+pub fn iter_component_registrations() -> impl Iterator<Item = &'static ComponentRegistration> {
+    inventory::iter::<ComponentRegistration>.into_iter()
+}
+pub fn iter_tag_registrations() -> impl Iterator<Item = &'static TagRegistration> {
+    inventory::iter::<TagRegistration>.into_iter()
+}
 
 #[macro_export]
 macro_rules! register_tag_type {

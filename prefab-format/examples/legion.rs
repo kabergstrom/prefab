@@ -1,5 +1,5 @@
 use atelier_core::asset_uuid;
-use prefab_format::{ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer};
+use prefab_format::{ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_diff::SerdeDiff;
 use std::{cell::RefCell, collections::HashMap};
@@ -34,15 +34,15 @@ struct World {
 }
 
 impl prefab_format::StorageDeserializer for &World {
-    fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {
+    fn begin_entity_object(&self, _prefab: &PrefabUuid, entity: &EntityUuid) {
         let mut this = self.inner.borrow_mut();
         let new_entity = this.world.insert((), vec![()])[0];
         this.entity_map.insert(*entity, new_entity);
     }
-    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid) {}
+    fn end_entity_object(&self, _prefab: &PrefabUuid, _entity: &EntityUuid) {}
     fn deserialize_component<'de, D: Deserializer<'de>>(
         &self,
-        prefab: &PrefabUuid,
+        _prefab: &PrefabUuid,
         entity: &EntityUuid,
         component_type: &ComponentTypeUuid,
         deserializer: D,
@@ -65,7 +65,7 @@ impl prefab_format::StorageDeserializer for &World {
         println!("deserialized component");
         Ok(())
     }
-    fn begin_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid) {
+    fn begin_prefab_ref(&self, _prefab: &PrefabUuid, target_prefab: &PrefabUuid) {
         let prefab = PREFABS
             .iter()
             .filter(|p| &p.0 == target_prefab)
@@ -74,11 +74,11 @@ impl prefab_format::StorageDeserializer for &World {
         println!("reading prefab {:?}", prefab.0);
         read_prefab(prefab.1, self);
     }
-    fn end_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid) {}
+    fn end_prefab_ref(&self, _prefab: &PrefabUuid, _target_prefab: &PrefabUuid) {}
     fn apply_component_diff<'de, D: Deserializer<'de>>(
         &self,
-        parent_prefab: &PrefabUuid,
-        prefab_ref: &PrefabUuid,
+        _parent_prefab: &PrefabUuid,
+        _prefab_ref: &PrefabUuid,
         entity: &EntityUuid,
         component_type: &ComponentTypeUuid,
         deserializer: D,
