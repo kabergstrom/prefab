@@ -167,6 +167,13 @@ pub struct ComponentRegistration {
         legion::entity::Entity,
         &mut dyn FnMut(&dyn erased_serde::Serialize),
     ),
+    pub(crate) diff_single: fn(
+        &mut dyn erased_serde::Serializer,
+        &legion::world::World,
+        legion::entity::Entity,
+        &legion::world::World,
+        legion::entity::Entity,
+    ),
     pub(crate) apply_diff:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
     pub(crate) comp_clone_fn: fn(*const u8, *mut u8, usize),
@@ -183,6 +190,17 @@ impl ComponentRegistration {
 
     pub fn meta(&self) -> &ComponentMeta {
         &self.meta
+    }
+
+    pub fn diff_single(
+        &self,
+        ser: &mut dyn erased_serde::Serializer,
+        src_world: &legion::world::World,
+        src_entity: legion::entity::Entity,
+        dst_world: &legion::world::World,
+        dst_entity: legion::entity::Entity,
+    ) {
+        (self.diff_single)(ser, src_world, src_entity, dst_world, dst_entity)
     }
 
     pub fn apply_diff(
@@ -247,6 +265,23 @@ impl ComponentRegistration {
                     .get_component::<T>(entity)
                     .expect("entity not present when serializing component");
                 s_fn(&*comp)
+            },
+            diff_single: |ser, src_world, src_entity, dst_world, dst_entity| {
+                // TODO propagate error
+                let mut src_comp = src_world
+                    .get_component::<T>(src_entity);
+                let mut dst_comp = dst_world
+                    .get_component::<T>(dst_entity);
+
+                if let (Some(src_comp), Some(dst_comp)) = (src_comp, dst_comp) {
+
+                    <serde_diff::Diff<T> as serde::ser::Serialize>::serialize(
+                        &serde_diff::Diff::serializable(&*src_comp, &*dst_comp),
+                        ser
+                    ).expect("failed to serialize diff");
+                }
+
+
             },
             apply_diff: |d, world, entity| {
                 // TODO propagate error
