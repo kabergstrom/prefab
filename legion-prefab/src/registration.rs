@@ -173,7 +173,7 @@ pub struct ComponentRegistration {
         legion::entity::Entity,
         &legion::world::World,
         legion::entity::Entity,
-    ),
+    ) -> bool,
     pub(crate) apply_diff:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
     pub(crate) comp_clone_fn: fn(*const u8, *mut u8, usize),
@@ -199,7 +199,7 @@ impl ComponentRegistration {
         src_entity: legion::entity::Entity,
         dst_world: &legion::world::World,
         dst_entity: legion::entity::Entity,
-    ) {
+    ) -> bool {
         (self.diff_single)(ser, src_world, src_entity, dst_world, dst_entity)
     }
 
@@ -274,14 +274,16 @@ impl ComponentRegistration {
                     .get_component::<T>(dst_entity);
 
                 if let (Some(src_comp), Some(dst_comp)) = (src_comp, dst_comp) {
-
+                    let diff = serde_diff::Diff::serializable(&*src_comp, &*dst_comp);
                     <serde_diff::Diff<T> as serde::ser::Serialize>::serialize(
-                        &serde_diff::Diff::serializable(&*src_comp, &*dst_comp),
+                        &diff,
                         ser
                     ).expect("failed to serialize diff");
+
+                    diff.has_changes()
+                } else {
+                    false
                 }
-
-
             },
             apply_diff: |d, world, entity| {
                 // TODO propagate error

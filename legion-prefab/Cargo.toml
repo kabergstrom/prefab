@@ -13,7 +13,7 @@ legion = { path = "../../legion", default-features = false, features = ["serde-1
 inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
-serde-diff = { git = "https://github.com/kabergstrom/serde-diff.git" }
+serde-diff = { git = "https://github.com/amethyst/serde-diff.git" }
 
 [dev-dependencies]
 ron = "0.5"
