@@ -192,11 +192,11 @@ impl Serialize for Prefab {
         use std::iter::FromIterator;
         let tag_types = HashMap::from_iter(
             crate::registration::iter_tag_registrations()
-                .map(|reg| (legion::storage::TagTypeId(reg.ty()), reg.clone())),
+                .map(|reg| (legion::storage::TagTypeId(reg.ty(), 0), reg.clone())),
         );
         let comp_types = HashMap::from_iter(
             crate::registration::iter_component_registrations()
-                .map(|reg| (legion::storage::ComponentTypeId(reg.ty()), reg.clone())),
+                .map(|reg| (legion::storage::ComponentTypeId(reg.ty(), 0), reg.clone())),
         );
 
         // Providing this map ensures that UUIDs are preserved across serialization/deserialization
@@ -206,7 +206,7 @@ impl Serialize for Prefab {
         }
 
         let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
-        let serializable_world = legion::ser::serializable_world(&self.world, &serialize_impl);
+        let serializable_world = legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
         let mut struct_ser = serializer.serialize_struct("Prefab", 2)?;
         struct_ser.serialize_field("prefab_meta", &self.prefab_meta)?;
         struct_ser.serialize_field("world", &serializable_world)?;
@@ -287,17 +287,17 @@ impl<'de> Deserialize<'de> for WorldDeser {
         use std::iter::FromIterator;
         let tag_types = HashMap::from_iter(
             crate::registration::iter_tag_registrations()
-                .map(|reg| (legion::storage::TagTypeId(reg.ty()), reg.clone())),
+                .map(|reg| (legion::storage::TagTypeId(reg.ty(), 0), reg.clone())),
         );
         let comp_types = HashMap::from_iter(
             crate::registration::iter_component_registrations()
-                .map(|reg| (legion::storage::ComponentTypeId(reg.ty()), reg.clone())),
+                .map(|reg| (legion::storage::ComponentTypeId(reg.ty(), 0), reg.clone())),
         );
         let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
 
         // TODO support sharing universe
         let mut world = legion::world::World::new();
-        let deserializable_world = legion::de::deserializable(&mut world, &deserialize_impl);
+        let deserializable_world = legion::serialize::de::deserializable(&mut world, &deserialize_impl);
         serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
         Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
     }
@@ -318,7 +318,7 @@ impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
                 context
                     .registered_components
                     .iter()
-                    .map(|(type_id, reg)| (ComponentTypeId(reg.ty()), *type_id)),
+                    .map(|(type_id, reg)| (ComponentTypeId(reg.ty(), 0), *type_id)),
             ),
         }
     }

@@ -9,7 +9,7 @@ prefab-format = { path = "../prefab-format" }
 serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
 #legion = { version = "0.2.1", default-features = false, features = ["serde-1"] }
-legion = { path = "../../legion", default-features = false, features = ["serde-1"] }
+legion = { path = "../../legion", default-features = false, features = ["serialize"] }
 inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }

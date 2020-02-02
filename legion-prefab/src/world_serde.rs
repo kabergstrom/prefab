@@ -40,7 +40,7 @@ impl SerializeImpl {
     }
 }
 
-impl legion::ser::WorldSerializer for SerializeImpl {
+impl legion::serialize::ser::WorldSerializer for SerializeImpl {
     fn can_serialize_tag(
         &self,
         ty: &TagTypeId,
@@ -176,7 +176,7 @@ impl DeserializeImpl {
     }
 }
 
-impl legion::de::WorldDeserializer for DeserializeImpl {
+impl legion::serialize::de::WorldDeserializer for DeserializeImpl {
     fn deserialize_archetype_description<'de, D: Deserializer<'de>>(
         &self,
         deserializer: D,
@@ -231,7 +231,7 @@ impl legion::de::WorldDeserializer for DeserializeImpl {
     fn deserialize_entities<'de, D: Deserializer<'de>>(
         &self,
         deserializer: D,
-        entity_allocator: &mut EntityAllocator,
+        entity_allocator: &EntityAllocator,
         entities: &mut Vec<Entity>,
     ) -> Result<(), <D as Deserializer<'de>>::Error> {
         let entity_uuids = <Vec<uuid::Bytes> as Deserialize>::deserialize(deserializer)?;
