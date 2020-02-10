@@ -153,6 +153,7 @@ pub struct ComponentRegistration {
     pub(crate) uuid: type_uuid::Bytes,
     pub(crate) ty: TypeId,
     pub(crate) meta: ComponentMeta,
+    pub(crate) type_name: &'static str,
     pub(crate) comp_serialize_fn:
         unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize)),
     pub(crate) comp_deserialize_fn: fn(
@@ -190,6 +191,10 @@ impl ComponentRegistration {
 
     pub fn meta(&self) -> &ComponentMeta {
         &self.meta
+    }
+
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
     }
 
     pub fn diff_single(
@@ -239,6 +244,7 @@ impl ComponentRegistration {
             uuid: T::UUID,
             ty: TypeId::of::<T>(),
             meta: ComponentMeta::of::<T>(),
+            type_name: std::any::type_name::<T>(),
             comp_serialize_fn: |comp_storage, serialize_fn| unsafe {
                 let slice = comp_storage.data_slice::<T>();
                 serialize_fn(&*slice);
