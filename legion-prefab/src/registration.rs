@@ -180,9 +180,9 @@ pub struct ComponentRegistration {
     pub(crate) diff_single_fn: fn(
         &mut dyn erased_serde::Serializer,
         &legion::world::World,
-        legion::entity::Entity,
+        Option<legion::entity::Entity>,
         &legion::world::World,
-        legion::entity::Entity,
+        Option<legion::entity::Entity>,
     ) -> DiffSingleResult,
     pub(crate) apply_diff_fn:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
@@ -230,9 +230,9 @@ impl ComponentRegistration {
         &self,
         ser: &mut dyn erased_serde::Serializer,
         src_world: &legion::world::World,
-        src_entity: legion::entity::Entity,
+        src_entity: Option<legion::entity::Entity>,
         dst_world: &legion::world::World,
-        dst_entity: legion::entity::Entity,
+        dst_entity: Option<legion::entity::Entity>,
     ) -> DiffSingleResult {
         (self.diff_single_fn)(ser, src_world, src_entity, dst_world, dst_entity)
     }
@@ -304,10 +304,8 @@ impl ComponentRegistration {
             },
             diff_single_fn: |ser, src_world, src_entity, dst_world, dst_entity| {
                 // TODO propagate error
-                let mut src_comp = src_world
-                    .get_component::<T>(src_entity);
-                let mut dst_comp = dst_world
-                    .get_component::<T>(dst_entity);
+                let mut src_comp = src_entity.map_or(None, |e| src_world.get_component::<T>(e));
+                let mut dst_comp = dst_entity.map_or(None, |e| dst_world.get_component::<T>(e));
 
                 if let (Some(src_comp), Some(dst_comp)) = (&src_comp, &dst_comp) {
                     //
