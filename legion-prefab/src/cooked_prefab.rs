@@ -9,19 +9,37 @@ pub struct CookedPrefab {
 }
 
 impl Serialize for CookedPrefab {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
         use std::iter::FromIterator;
-        let tag_types = HashMap::from_iter(
-            crate::registration::iter_tag_registrations()
-                .map(|reg| (legion::storage::TagTypeId(reg.ty(), 0), reg.clone())),
-        );
+        let tag_types =
+            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
+                (
+                    legion::storage::TagTypeId(
+                        reg.ty(),
+                        #[cfg(feature = "ffi")]
+                        0,
+                    ),
+                    reg.clone(),
+                )
+            }));
         let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations()
-                .map(|reg| (legion::storage::ComponentTypeId(reg.ty(), 0), reg.clone())),
+            crate::registration::iter_component_registrations().map(|reg| {
+                (
+                    legion::storage::ComponentTypeId(
+                        reg.ty(),
+                        #[cfg(feature = "ffi")]
+                        0,
+                    ),
+                    reg.clone(),
+                )
+            }),
         );
 
         let mut entity_map = HashMap::with_capacity(self.entities.len());
@@ -30,7 +48,8 @@ impl Serialize for CookedPrefab {
         }
 
         let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
-        let serializable_world = legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
+        let serializable_world =
+            legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
         let mut struct_ser = serializer.serialize_struct("CookedPrefab", 2)?;
         struct_ser.serialize_field("world", &serializable_world)?;
         struct_ser.end()
@@ -51,10 +70,16 @@ impl<'de> Deserialize<'de> for CookedPrefab {
         impl<'de> serde::de::Visitor<'de> for PrefabDeserVisitor {
             type Value = CookedPrefab;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct CookedPrefab")
             }
-            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            fn visit_seq<V>(
+                self,
+                mut seq: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::SeqAccess<'de>,
             {
@@ -65,7 +90,10 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                 })
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::MapAccess<'de>,
             {
@@ -97,19 +125,35 @@ impl<'de> Deserialize<'de> for WorldDeser {
         D: Deserializer<'de>,
     {
         use std::iter::FromIterator;
-        let tag_types = HashMap::from_iter(
-            crate::registration::iter_tag_registrations()
-                .map(|reg| (legion::storage::TagTypeId(reg.ty(), 0), reg.clone())),
-        );
+        let tag_types =
+            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
+                (
+                    legion::storage::TagTypeId(
+                        reg.ty(),
+                        #[cfg(feature = "ffi")]
+                        0,
+                    ),
+                    reg.clone(),
+                )
+            }));
         let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations()
-                .map(|reg| (legion::storage::ComponentTypeId(reg.ty(), 0), reg.clone())),
+            crate::registration::iter_component_registrations().map(|reg| {
+                (
+                    legion::storage::ComponentTypeId(
+                        reg.ty(),
+                        #[cfg(feature = "ffi")]
+                        0,
+                    ),
+                    reg.clone(),
+                )
+            }),
         );
         let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
 
         // TODO support sharing universe
         let mut world = legion::world::World::new();
-        let deserializable_world = legion::serialize::de::deserializable(&mut world, &deserialize_impl);
+        let deserializable_world =
+            legion::serialize::de::deserializable(&mut world, &deserialize_impl);
         serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
         Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
     }

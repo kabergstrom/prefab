@@ -16,7 +16,10 @@ struct ComponentDeserializer<'de, T: Deserialize<'de>> {
 
 impl<'de, T: Deserialize<'de> + 'static> DeserializeSeed<'de> for ComponentDeserializer<'de, T> {
     type Value = ();
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -37,7 +40,10 @@ impl<'de, 'a, T: for<'b> Deserialize<'b> + 'static> DeserializeSeed<'de>
     for ComponentSeqDeserializer<'a, T>
 {
     type Value = ();
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -49,10 +55,16 @@ impl<'de, 'a, T: for<'b> Deserialize<'b> + 'static> Visitor<'de>
 {
     type Value = ();
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(
+        &self,
+        formatter: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
         formatter.write_str("sequence of objects")
     }
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(
+        self,
+        mut seq: A,
+    ) -> Result<Self::Value, A::Error>
     where
         A: de::SeqAccess<'de>,
     {
@@ -154,7 +166,7 @@ pub enum DiffSingleResult {
     NoChange,
     Change,
     Add,
-    Remove
+    Remove,
 }
 
 #[derive(Clone)]
@@ -170,8 +182,11 @@ pub struct ComponentRegistration {
         get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
     ) -> Result<(), erased_serde::Error>,
     pub(crate) register_comp_fn: fn(&mut ArchetypeDescription),
-    pub(crate) deserialize_single_fn:
-        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity) -> Result<(), legion::world::EntityMutationError>,
+    pub(crate) deserialize_single_fn: fn(
+        &mut dyn erased_serde::Deserializer,
+        &mut legion::world::World,
+        legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError>,
     pub(crate) serialize_single_fn: fn(
         &legion::world::World,
         legion::entity::Entity,
@@ -187,10 +202,14 @@ pub struct ComponentRegistration {
     pub(crate) apply_diff_fn:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
     pub(crate) comp_clone_fn: fn(*const u8, *mut u8, usize),
-    pub(crate) add_default_to_entity_fn:
-        fn(&mut legion::world::World, legion::entity::Entity) -> Result<(), legion::world::EntityMutationError>,
-    pub(crate) remove_from_entity_fn:
-        fn(&mut legion::world::World, legion::entity::Entity) -> Result<(), legion::world::EntityMutationError>,
+    pub(crate) add_default_to_entity_fn: fn(
+        &mut legion::world::World,
+        legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError>,
+    pub(crate) remove_from_entity_fn: fn(
+        &mut legion::world::World,
+        legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError>,
 }
 
 impl ComponentRegistration {
@@ -203,7 +222,11 @@ impl ComponentRegistration {
     }
 
     pub fn component_type_id(&self) -> ComponentTypeId {
-        ComponentTypeId(self.ty(), 0)
+        ComponentTypeId(
+            self.ty(),
+            #[cfg(feature = "ffi")]
+            0,
+        )
     }
 
     pub fn meta(&self) -> &ComponentMeta {
@@ -214,15 +237,28 @@ impl ComponentRegistration {
         self.type_name
     }
 
-    pub fn deserialize_single(&self, deserializer: &mut dyn erased_serde::Deserializer, world: &mut legion::world::World, entity: legion::entity::Entity) -> Result<(), legion::world::EntityMutationError> {
+    pub fn deserialize_single(
+        &self,
+        deserializer: &mut dyn erased_serde::Deserializer,
+        world: &mut legion::world::World,
+        entity: legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError> {
         (self.deserialize_single_fn)(deserializer, world, entity)
     }
 
-    pub fn add_default_to_entity(&self, world: &mut legion::world::World, entity: legion::entity::Entity) -> Result<(), legion::world::EntityMutationError> {
+    pub fn add_default_to_entity(
+        &self,
+        world: &mut legion::world::World,
+        entity: legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError> {
         (self.add_default_to_entity_fn)(world, entity)
     }
 
-    pub fn remove_from_entity(&self, world: &mut legion::world::World, entity: legion::entity::Entity) -> Result<(), legion::world::EntityMutationError> {
+    pub fn remove_from_entity(
+        &self,
+        world: &mut legion::world::World,
+        entity: legion::entity::Entity,
+    ) -> Result<(), legion::world::EntityMutationError> {
         (self.remove_from_entity_fn)(world, entity)
     }
 
@@ -246,7 +282,12 @@ impl ComponentRegistration {
         (self.apply_diff_fn)(de, world, entity);
     }
 
-    pub unsafe fn clone_components(&self, src: *const u8, dst: *mut u8, num_components: usize) {
+    pub unsafe fn clone_components(
+        &self,
+        src: *const u8,
+        dst: *mut u8,
+        num_components: usize,
+    ) {
         (self.comp_clone_fn)(src, dst, num_components);
     }
 
@@ -290,7 +331,10 @@ impl ComponentRegistration {
             register_comp_fn: |desc| {
                 desc.register_component::<T>();
             },
-            deserialize_single_fn: |d, world, entity| -> Result<(), legion::world::EntityMutationError> {
+            deserialize_single_fn: |d,
+                                    world,
+                                    entity|
+             -> Result<(), legion::world::EntityMutationError> {
                 // TODO propagate error
                 let comp =
                     erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
@@ -314,10 +358,8 @@ impl ComponentRegistration {
                     // NoChange
                     //
                     let diff = serde_diff::Diff::serializable(&**src_comp, &**dst_comp);
-                    <serde_diff::Diff<T> as serde::ser::Serialize>::serialize(
-                        &diff,
-                        ser
-                    ).expect("failed to serialize diff");
+                    <serde_diff::Diff<T> as serde::ser::Serialize>::serialize(&diff, ser)
+                        .expect("failed to serialize diff");
 
                     if diff.has_changes() {
                         DiffSingleResult::Change
@@ -361,12 +403,8 @@ impl ComponentRegistration {
                     std::ptr::write(dst_ptr, <T as Clone>::clone(&*src_ptr));
                 }
             },
-            add_default_to_entity_fn: |world, entity| {
-                world.add_component(entity, T::default())
-            },
-            remove_from_entity_fn: |world, entity| {
-                world.remove_component::<T>(entity)
-            }
+            add_default_to_entity_fn: |world, entity| world.add_component(entity, T::default()),
+            remove_from_entity_fn: |world, entity| world.remove_component::<T>(entity),
         }
     }
 }

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use type_uuid::TypeUuid;
 
 // Components require TypeUuid + Serialize + Deserialize + SerdeDiff + Send + Sync
-#[derive(TypeUuid, Serialize, Deserialize, SerdeDiff, Clone)]
+#[derive(TypeUuid, Serialize, Deserialize, SerdeDiff, Clone, Default)]
 #[uuid = "f5780013-bae4-49f0-ac0e-a108ff52fec0"]
 struct Position2D {
     position: Vec<f32>,

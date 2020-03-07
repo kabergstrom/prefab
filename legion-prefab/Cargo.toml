@@ -8,11 +8,11 @@ edition = "2018"
 prefab-format = { path = "../prefab-format" }
 serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
-legion = { git = "https://github.com/kabergstrom/legion", branch = "clone_move", default-features = false, features = ["serialize"] }
+legion = { git = "https://github.com/kabergstrom/legion", default-features = false, features = ["serialize"], branch="clone_move_rebased" }
 inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
-serde-diff = { git = "https://github.com/amethyst/serde-diff.git" }
+serde-diff = { git = "https://github.com/amethyst/serde-diff.git", rev="83fd749e" }
 
 [dev-dependencies]
 ron = "0.5"

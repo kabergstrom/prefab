@@ -5,7 +5,8 @@ use prefab_format as format;
 
 mod registration;
 pub use registration::{
-    ComponentRegistration, TagRegistration, iter_component_registrations, iter_tag_registrations, DiffSingleResult
+    ComponentRegistration, TagRegistration, iter_component_registrations, iter_tag_registrations,
+    DiffSingleResult,
 };
 
 mod prefab_serde;

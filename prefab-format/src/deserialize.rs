@@ -6,10 +6,18 @@ use serde::{
 pub trait Storage {
     /// Called when the deserializer encounters an entity object.
     /// Ideally used to start buffering component data for an entity.
-    fn begin_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid);
+    fn begin_entity_object(
+        &self,
+        prefab: &PrefabUuid,
+        entity: &EntityUuid,
+    );
     /// Called when the deserializer finishes with an entity object.
     /// Ideally finishes buffered storage operations for an entity.
-    fn end_entity_object(&self, prefab: &PrefabUuid, entity: &EntityUuid);
+    fn end_entity_object(
+        &self,
+        prefab: &PrefabUuid,
+        entity: &EntityUuid,
+    );
     /// Called when the deserializer encounters component data.
     /// The Storage implementation must handle deserialization of the data,
     /// using the ComponentTypeUuid to identify the type to deserialize as.
@@ -24,9 +32,17 @@ pub trait Storage {
     /// The Storage implementation should probably ensure that the referenced prefab
     /// is loaded since this call will most likely be followed by `apply_component_diff` calls.
     /// Alternatively, the implementation can use serde-transcode to save the diff for later.
-    fn begin_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid);
+    fn begin_prefab_ref(
+        &self,
+        prefab: &PrefabUuid,
+        target_prefab: &PrefabUuid,
+    );
     /// Called when the deserializer is finished with a prefab reference.
-    fn end_prefab_ref(&self, prefab: &PrefabUuid, target_prefab: &PrefabUuid);
+    fn end_prefab_ref(
+        &self,
+        prefab: &PrefabUuid,
+        target_prefab: &PrefabUuid,
+    );
     /// Called when the deserializer encounters a component diff for a prefab reference.
     /// The Storage implementation must handle deserialization of the diff,
     /// using the ComponentTypeUuid to identify the type to deserialize as.
@@ -49,7 +65,10 @@ struct ComponentOverrideData<'a, S: Storage> {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverrideData<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -88,18 +107,27 @@ enum ComponentOverrideField {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for ComponentOverride<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for ComponentOverride<'a, S> {
             type Value = ();
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct ComponentOverride")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
@@ -158,18 +186,27 @@ enum EntityOverrideField {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityOverride<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for EntityOverride<'a, S> {
             type Value = ();
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct EntityOverride")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
@@ -217,18 +254,27 @@ enum PrefabRefField {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabRef<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for PrefabRef<'a, S> {
             type Value = ();
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct PrefabRef")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
@@ -294,7 +340,10 @@ struct EntityComponentData<'a, S: Storage> {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponentData<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -324,18 +373,27 @@ impl<'a, S: Storage> Clone for EntityComponent<'a, S> {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityComponent<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for EntityComponent<'a, S> {
             type Value = ();
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct Entity")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
@@ -386,18 +444,27 @@ enum EntityPrefabObjectField {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
     type Value = PrefabObjectDeserializer<'a, S>;
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         impl<'a, 'de, S: Storage> Visitor<'de> for EntityPrefabObject<'a, S> {
             type Value = PrefabObjectDeserializer<'a, S>;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct Entity")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: de::MapAccess<'de>,
             {
@@ -442,7 +509,10 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for EntityPrefabObject<'a, S> {
 impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabObjectDeserializer<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -454,10 +524,16 @@ impl<'de, 'a, S: Storage> DeserializeSeed<'de> for PrefabObjectDeserializer<'a, 
 impl<'a, 'de, S: Storage> Visitor<'de> for PrefabObjectDeserializer<'a, S> {
     type Value = ();
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(
+        &self,
+        formatter: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
         formatter.write_str("sequence of objects")
     }
-    fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+    fn visit_enum<A>(
+        self,
+        data: A,
+    ) -> Result<Self::Value, A::Error>
     where
         A: de::EnumAccess<'de>,
     {
@@ -492,7 +568,10 @@ pub struct SeqDeserializer<T>(T);
 impl<'de, T: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SeqDeserializer<T> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -502,10 +581,16 @@ impl<'de, T: DeserializeSeed<'de> + Clone> DeserializeSeed<'de> for SeqDeseriali
 impl<'de, T: DeserializeSeed<'de> + Clone> Visitor<'de> for SeqDeserializer<T> {
     type Value = ();
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(
+        &self,
+        formatter: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
         formatter.write_str("sequence of objects")
     }
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(
+        self,
+        mut seq: A,
+    ) -> Result<Self::Value, A::Error>
     where
         A: de::SeqAccess<'de>,
     {
@@ -520,7 +605,10 @@ pub struct PrefabDeserializer<'a, S: Storage> {
 impl<'de, 'a: 'de, S: Storage> DeserializeSeed<'de> for PrefabDeserializer<'a, S> {
     type Value = ();
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    fn deserialize<D>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -538,11 +626,17 @@ enum PrefabField {
 impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
     type Value = ();
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(
+        &self,
+        formatter: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
         formatter.write_str("struct Prefab")
     }
 
-    fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+    fn visit_map<V>(
+        self,
+        mut map: V,
+    ) -> Result<Self::Value, V::Error>
     where
         V: de::MapAccess<'de>,
     {

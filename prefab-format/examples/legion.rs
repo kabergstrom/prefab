@@ -34,12 +34,21 @@ struct World {
 }
 
 impl prefab_format::StorageDeserializer for &World {
-    fn begin_entity_object(&self, _prefab: &PrefabUuid, entity: &EntityUuid) {
+    fn begin_entity_object(
+        &self,
+        _prefab: &PrefabUuid,
+        entity: &EntityUuid,
+    ) {
         let mut this = self.inner.borrow_mut();
         let new_entity = this.world.insert((), vec![()])[0];
         this.entity_map.insert(*entity, new_entity);
     }
-    fn end_entity_object(&self, _prefab: &PrefabUuid, _entity: &EntityUuid) {}
+    fn end_entity_object(
+        &self,
+        _prefab: &PrefabUuid,
+        _entity: &EntityUuid,
+    ) {
+    }
     fn deserialize_component<'de, D: Deserializer<'de>>(
         &self,
         _prefab: &PrefabUuid,
@@ -65,7 +74,11 @@ impl prefab_format::StorageDeserializer for &World {
         println!("deserialized component");
         Ok(())
     }
-    fn begin_prefab_ref(&self, _prefab: &PrefabUuid, target_prefab: &PrefabUuid) {
+    fn begin_prefab_ref(
+        &self,
+        _prefab: &PrefabUuid,
+        target_prefab: &PrefabUuid,
+    ) {
         let prefab = PREFABS
             .iter()
             .filter(|p| &p.0 == target_prefab)
@@ -74,7 +87,12 @@ impl prefab_format::StorageDeserializer for &World {
         println!("reading prefab {:?}", prefab.0);
         read_prefab(prefab.1, self);
     }
-    fn end_prefab_ref(&self, _prefab: &PrefabUuid, _target_prefab: &PrefabUuid) {}
+    fn end_prefab_ref(
+        &self,
+        _prefab: &PrefabUuid,
+        _target_prefab: &PrefabUuid,
+    ) {
+    }
     fn apply_component_diff<'de, D: Deserializer<'de>>(
         &self,
         _parent_prefab: &PrefabUuid,
@@ -113,7 +131,10 @@ const PREFABS: [(PrefabUuid, &'static str); 2] = [
     ),
 ];
 
-fn read_prefab(text: &str, world: &World) {
+fn read_prefab(
+    text: &str,
+    world: &World,
+) {
     let mut deserializer = ron::de::Deserializer::from_bytes(text.as_bytes()).unwrap();
 
     prefab_format::deserialize(&mut deserializer, &world).unwrap();

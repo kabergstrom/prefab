@@ -7,14 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde-diff = { git = "https://github.com/amethyst/serde-diff.git" }
+serde-diff = { git = "https://github.com/amethyst/serde-diff.git", rev="83fd749e" }
 type-uuid = "0.1"
 serde = { version = "1.0", default-features = false, features = [ "derive" ] }
 uuid = { version = "0.8", features = [ "serde" ] }
 
 [dev-dependencies]
 ron = "0.5"
-legion = { git = "https://github.com/kabergstrom/legion", branch = "clone_move", default-features = false, features = ["serialize"] }
+legion = { git = "https://github.com/kabergstrom/legion", default-features = false, features = ["serialize"], branch="clone_move_rebased" }
 linkme = "0.1"
 erased-serde = "0.3"
 atelier-core = { git = "https://github.com/amethyst/atelier-assets", branch = "async_daemon" }
