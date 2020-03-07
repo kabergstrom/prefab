@@ -2,7 +2,6 @@ use legion::prelude::*;
 use legion_prefab::ComponentRegistration;
 use prefab_format::ComponentTypeUuid;
 use serde::{Deserialize, Serialize};
-use serde_diff::SerdeDiff;
 use std::collections::HashMap;
 use type_uuid::TypeUuid;
 

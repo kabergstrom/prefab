@@ -1,7 +1,6 @@
 use atelier_core::asset_uuid;
 use prefab_format::{ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_diff::SerdeDiff;
 use std::{cell::RefCell, collections::HashMap};
 use type_uuid::TypeUuid;
 mod prefab_sample {

@@ -1,6 +1,5 @@
 use prefab_format::{self, ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_diff::{Apply, SerdeDiff};
 use std::cell::RefCell;
 use type_uuid::TypeUuid;
 mod prefab_sample {
