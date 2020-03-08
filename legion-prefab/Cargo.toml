@@ -12,7 +12,7 @@ legion = { git = "https://github.com/kabergstrom/legion", default-features = fal
 inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
-serde-diff = { git = "https://github.com/amethyst/serde-diff.git" }
+serde-diff = "0.3"
 
 [dev-dependencies]
 ron = "0.5"
