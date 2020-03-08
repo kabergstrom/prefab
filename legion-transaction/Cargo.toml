@@ -14,4 +14,6 @@ erased-serde = "0.3"
 legion = { git = "https://github.com/kabergstrom/legion", default-features = false, features = ["serialize"], branch="clone_move_rebased" }
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
 log="0.4"
-bincode = { git="https://github.com/aclysma/bincode.git", branch="new-trait-bound" }
+# We need this PR (https://github.com/servo/bincode/pull/288) but it's not published yet
+#bincode = "1.2"
+bincode = { git = "https://github.com/servo/bincode.git", rev="e30e91e3a" }
