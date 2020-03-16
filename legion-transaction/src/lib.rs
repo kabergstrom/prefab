@@ -3,6 +3,7 @@
 mod clone_merge;
 pub use clone_merge::CopyCloneImpl;
 pub use clone_merge::SpawnCloneImpl;
+pub use clone_merge::SpawnCloneImplHandlerSet;
 pub use clone_merge::SpawnFrom;
 pub use clone_merge::SpawnInto;
 

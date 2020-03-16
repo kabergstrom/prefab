@@ -8,17 +8,17 @@ use legion::index::ComponentIndex;
 
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
-pub struct CopyCloneImpl {
-    components: HashMap<ComponentTypeId, ComponentRegistration>,
+pub struct CopyCloneImpl<'a> {
+    components: &'a HashMap<ComponentTypeId, ComponentRegistration>,
 }
 
-impl CopyCloneImpl {
-    pub fn new(components: HashMap<ComponentTypeId, ComponentRegistration>) -> Self {
+impl<'a> CopyCloneImpl<'a> {
+    pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration>) -> Self {
         Self { components }
     }
 }
 
-impl legion::world::CloneImpl for CopyCloneImpl {
+impl<'a> legion::world::CloneImpl for CopyCloneImpl<'a> {
     fn map_component_type(
         &self,
         component_type: ComponentTypeId,
@@ -115,28 +115,16 @@ where
     }
 }
 
-/// A CloneMergeImpl that
-///
-/// An implementation passed into legion::world::World::clone_merge. This implementation supports
-/// providing custom mappings with add_mapping (which takes a closure) and add_mapping_into (which
-/// uses Rust standard library's .into(). If a mapping isn't provided for a type, the component
-/// will be cloned using ComponentRegistration passed in new()
-pub struct SpawnCloneImpl<'a> {
-    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>,
-    components: HashMap<ComponentTypeId, ComponentRegistration>,
-    resources: &'a Resources,
+/// A registry of handlers for use with SpawnCloneImpl
+pub struct SpawnCloneImplHandlerSet {
+    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>
 }
 
-impl<'a> SpawnCloneImpl<'a> {
-    /// Creates a new implementation
-    pub fn new(
-        components: HashMap<ComponentTypeId, ComponentRegistration>,
-        resources: &'a Resources,
-    ) -> Self {
+impl SpawnCloneImplHandlerSet {
+    /// Creates a new registry of handlers
+    pub fn new() -> Self {
         Self {
-            handlers: Default::default(),
-            components,
-            resources,
+            handlers: Default::default()
         }
     }
 
@@ -245,15 +233,15 @@ impl<'a> SpawnCloneImpl<'a> {
         FromT: Component,
         IntoT: Component,
         F: Fn(
-                &World,                    // src_world
-                &ComponentStorage,         // src_component_storage
-                Range<ComponentIndex>,     // src_component_storage_indexes
-                &Resources,                // resources
-                &[Entity],                 // src_entities
-                &[Entity],                 // dst_entities
-                &[FromT],                  // src_data
-                &mut [MaybeUninit<IntoT>], // dst_data
-            ) + 'static,
+            &World,                    // src_world
+            &ComponentStorage,         // src_component_storage
+            Range<ComponentIndex>,     // src_component_storage_indexes
+            &Resources,                // resources
+            &[Entity],                 // src_entities
+            &[Entity],                 // dst_entities
+            &[FromT],                  // src_data
+            &mut [MaybeUninit<IntoT>], // dst_data
+        ) + 'static,
     {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
@@ -301,14 +289,42 @@ impl<'a> SpawnCloneImpl<'a> {
     }
 }
 
-impl<'a> legion::world::CloneImpl for SpawnCloneImpl<'a> {
+
+/// A CloneMergeImpl that
+///
+/// An implementation passed into legion::world::World::clone_merge. This implementation supports
+/// providing custom mappings with add_mapping (which takes a closure) and add_mapping_into (which
+/// uses Rust standard library's .into(). If a mapping isn't provided for a type, the component
+/// will be cloned using ComponentRegistration passed in new()
+pub struct SpawnCloneImpl<'a, 'b, 'c> {
+    handler_set: &'a SpawnCloneImplHandlerSet,
+    components: &'b HashMap<ComponentTypeId, ComponentRegistration>,
+    resources: &'c Resources,
+}
+
+impl<'a, 'b, 'c> SpawnCloneImpl<'a, 'b, 'c> {
+    /// Creates a new implementation
+    pub fn new(
+        handler_set: &'a SpawnCloneImplHandlerSet,
+        components: &'b HashMap<ComponentTypeId, ComponentRegistration>,
+        resources: &'c Resources,
+    ) -> Self {
+        Self {
+            handler_set,
+            components,
+            resources,
+        }
+    }
+}
+
+impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
     fn map_component_type(
         &self,
         component_type: ComponentTypeId,
     ) -> (ComponentTypeId, ComponentMeta) {
         // We expect any type we will encounter to be registered either as an explicit mapping or
         // registered in the component registrations
-        let handler = &self.handlers.get(&component_type);
+        let handler = &self.handler_set.handlers.get(&component_type);
         if let Some(handler) = handler {
             (handler.dst_type_id(), handler.dst_type_meta())
         } else {
@@ -338,7 +354,7 @@ impl<'a> legion::world::CloneImpl for SpawnCloneImpl<'a> {
     ) {
         // We expect any type we will encounter to be registered either as an explicit mapping or
         // registered in the component registrations
-        let handler = &self.handlers.get(&src_type);
+        let handler = &self.handler_set.handlers.get(&src_type);
         if let Some(handler) = handler {
             handler.clone_components(
                 src_world,
