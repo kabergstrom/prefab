@@ -241,7 +241,7 @@ impl SpawnCloneImplHandlerSet {
             &[Entity],                 // dst_entities
             &[FromT],                  // src_data
             &mut [MaybeUninit<IntoT>], // dst_data
-        ) + 'static,
+        ) + Send + Sync + 'static,
     {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
@@ -378,7 +378,7 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
 
 /// Used internally to dynamic dispatch into a Box<CloneMergeMappingImpl<T>>
 /// These are created as mappings are added to CloneMergeImpl
-trait SpawnCloneImplMapping {
+trait SpawnCloneImplMapping : Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
     fn dst_type_meta(&self) -> ComponentMeta;
     fn clone_components(
@@ -453,7 +453,7 @@ where
         *const u8,             // src_data
         *mut u8,               // dst_data
         usize,                 // num_components
-    ),
+    ) + Send + Sync,
 {
     fn dst_type_id(&self) -> ComponentTypeId {
         self.dst_type_id
