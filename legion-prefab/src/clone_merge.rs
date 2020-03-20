@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use legion_prefab::ComponentRegistration;
+use crate::ComponentRegistration;
 use legion::storage::{ComponentMeta, ComponentTypeId, Component, ComponentStorage};
 use legion::prelude::*;
 use std::mem::MaybeUninit;
@@ -148,11 +148,6 @@ impl SpawnCloneImplHandlerSet {
              src_data: *const u8,
              dst_data: *mut u8,
              num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);
@@ -192,11 +187,6 @@ impl SpawnCloneImplHandlerSet {
              src_data: *const u8,
              dst_data: *mut u8,
              num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);
@@ -259,11 +249,6 @@ impl SpawnCloneImplHandlerSet {
                   src_data: *const u8,
                   dst_data: *mut u8,
                   num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);

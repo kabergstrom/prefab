@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use legion::prelude::*;
 use legion_prefab::DiffSingleResult;
 use legion_prefab::ComponentRegistration;
-use crate::CopyCloneImpl;
+use legion_prefab::CopyCloneImpl;
 
 #[derive(Clone, Debug)]
 pub enum EntityDiffOp {

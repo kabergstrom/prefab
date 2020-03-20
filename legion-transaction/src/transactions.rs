@@ -7,7 +7,7 @@ use legion_prefab::{ComponentRegistration, DiffSingleResult};
 use crate::component_diffs::{
     DiffSingleSerializerAcceptor, ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff,
 };
-use crate::CopyCloneImpl;
+use legion_prefab::CopyCloneImpl;
 
 struct TransactionBuilderEntityInfo {
     entity_uuid: EntityUuid,

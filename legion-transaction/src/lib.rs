@@ -1,12 +1,3 @@
-// Implements a safer, easier to use layer on top of legion's clone_from and clone_from_single by
-// using the type registry in legion-prefab
-mod clone_merge;
-pub use clone_merge::CopyCloneImpl;
-pub use clone_merge::SpawnCloneImpl;
-pub use clone_merge::SpawnCloneImplHandlerSet;
-pub use clone_merge::SpawnFrom;
-pub use clone_merge::SpawnInto;
-
 // Stores and applies diffs to legion worlds
 mod component_diffs;
 pub use component_diffs::ComponentDiff;
