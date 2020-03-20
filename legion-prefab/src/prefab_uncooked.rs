@@ -58,13 +58,10 @@ impl Prefab {
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
             prefab_refs: Default::default(),
-            entities: Default::default()
+            entities: Default::default(),
         };
 
-        Prefab {
-            world,
-            prefab_meta
-        }
+        Prefab { world, prefab_meta }
     }
 
     pub fn prefab_id(&self) -> PrefabUuid {
@@ -338,10 +335,7 @@ impl<'de> Deserialize<'de> for Prefab {
         deserializer.deserialize_struct("Prefab", FIELDS, PrefabDeserVisitor)
     }
 }
-struct WorldDeser(
-    World,
-    HashMap<uuid::Bytes, Entity>,
-);
+struct WorldDeser(World, HashMap<uuid::Bytes, Entity>);
 impl<'de> Deserialize<'de> for WorldDeser {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

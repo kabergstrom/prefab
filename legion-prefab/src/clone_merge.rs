@@ -117,14 +117,14 @@ where
 
 /// A registry of handlers for use with SpawnCloneImpl
 pub struct SpawnCloneImplHandlerSet {
-    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>
+    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>,
 }
 
 impl SpawnCloneImplHandlerSet {
     /// Creates a new registry of handlers
     pub fn new() -> Self {
         Self {
-            handlers: Default::default()
+            handlers: Default::default(),
         }
     }
 
@@ -223,15 +223,17 @@ impl SpawnCloneImplHandlerSet {
         FromT: Component,
         IntoT: Component,
         F: Fn(
-            &World,                    // src_world
-            &ComponentStorage,         // src_component_storage
-            Range<ComponentIndex>,     // src_component_storage_indexes
-            &Resources,                // resources
-            &[Entity],                 // src_entities
-            &[Entity],                 // dst_entities
-            &[FromT],                  // src_data
-            &mut [MaybeUninit<IntoT>], // dst_data
-        ) + Send + Sync + 'static,
+                &World,                    // src_world
+                &ComponentStorage,         // src_component_storage
+                Range<ComponentIndex>,     // src_component_storage_indexes
+                &Resources,                // resources
+                &[Entity],                 // src_entities
+                &[Entity],                 // dst_entities
+                &[FromT],                  // src_data
+                &mut [MaybeUninit<IntoT>], // dst_data
+            ) + Send
+            + Sync
+            + 'static,
     {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
@@ -273,7 +275,6 @@ impl SpawnCloneImplHandlerSet {
         self.handlers.insert(from_type_id, handler);
     }
 }
-
 
 /// A CloneMergeImpl that
 ///
@@ -363,7 +364,7 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
 
 /// Used internally to dynamic dispatch into a Box<CloneMergeMappingImpl<T>>
 /// These are created as mappings are added to CloneMergeImpl
-trait SpawnCloneImplMapping : Send + Sync {
+trait SpawnCloneImplMapping: Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
     fn dst_type_meta(&self) -> ComponentMeta;
     fn clone_components(
@@ -429,16 +430,17 @@ where
 impl<F> SpawnCloneImplMapping for SpawnCloneImplMappingImpl<F>
 where
     F: Fn(
-        &World,                // src_world
-        &ComponentStorage,     // src_component_storage
-        Range<ComponentIndex>, // src_component_storage_indexes
-        &Resources,            // resources
-        &[Entity],             // src_entities
-        &[Entity],             // dst_entities
-        *const u8,             // src_data
-        *mut u8,               // dst_data
-        usize,                 // num_components
-    ) + Send + Sync,
+            &World,                // src_world
+            &ComponentStorage,     // src_component_storage
+            Range<ComponentIndex>, // src_component_storage_indexes
+            &Resources,            // resources
+            &[Entity],             // src_entities
+            &[Entity],             // dst_entities
+            *const u8,             // src_data
+            *mut u8,               // dst_data
+            usize,                 // num_components
+        ) + Send
+        + Sync,
 {
     fn dst_type_id(&self) -> ComponentTypeId {
         self.dst_type_id
