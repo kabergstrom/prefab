@@ -8,6 +8,7 @@ pub use component_diffs::WorldDiff;
 pub use component_diffs::apply_diff;
 pub use component_diffs::apply_diff_to_prefab;
 pub use component_diffs::apply_diff_to_cooked_prefab;
+pub use component_diffs::ApplyDiffToPrefabError;
 
 // Generates diffs by comparing legion worlds
 mod transactions;

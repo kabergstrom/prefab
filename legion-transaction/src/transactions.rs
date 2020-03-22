@@ -145,6 +145,10 @@ impl Transaction {
         &mut self.after_world
     }
 
+    pub fn uuid_to_entity(&self, uuid: EntityUuid) -> Option<Entity> {
+        self.uuid_to_entities[&uuid].after_entity()
+    }
+
     pub fn create_transaction_diffs(
         &mut self,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,

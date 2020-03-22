@@ -18,6 +18,10 @@ pub use prefab_uncooked::{
 mod prefab_cooked;
 pub use prefab_cooked::{CookedPrefab};
 
+mod prefab_builder;
+pub use prefab_builder::PrefabBuilder;
+pub use prefab_builder::PrefabBuilderError;
+
 mod world_serde;
 pub use world_serde::{SerializeImpl, DeserializeImpl};
 

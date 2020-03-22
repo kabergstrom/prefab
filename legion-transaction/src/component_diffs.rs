@@ -207,13 +207,26 @@ impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a>
     }
 }
 
+#[derive(Debug)]
+pub enum ApplyDiffToPrefabError {
+    PrefabHasOverrides
+}
+
+/// Applies a world diff to a prefab
+///
+/// This is currently only supported for prefabs that have no overrides. If there is an override,
+/// None will be returned
 pub fn apply_diff_to_prefab(
     prefab: &Prefab,
     universe: &Universe,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
     clone_impl: &CopyCloneImpl,
-) -> Prefab {
+) -> Result<Prefab, ApplyDiffToPrefabError> {
+    if !prefab.prefab_meta.prefab_refs.is_empty() {
+        return Err(ApplyDiffToPrefabError::PrefabHasOverrides);
+    }
+
     let (new_world, uuid_to_new_entities) = apply_diff(
         &prefab.world,
         &prefab.prefab_meta.entities,
@@ -229,12 +242,13 @@ pub fn apply_diff_to_prefab(
         entities: uuid_to_new_entities,
     };
 
-    legion_prefab::Prefab {
+    Ok(legion_prefab::Prefab {
         world: new_world,
         prefab_meta,
-    }
+    })
 }
 
+/// Applies a world diff to a cooked prefab
 pub fn apply_diff_to_cooked_prefab(
     cooked_prefab: &CookedPrefab,
     universe: &Universe,
@@ -296,6 +310,8 @@ pub fn apply_diff(
                 {
                     new_world.delete(*new_prefab_entity);
                     uuid_to_new_entities.remove(entity_diff.entity_uuid());
+                } else {
+                    //TODO: Produce a remove override
                 }
             }
         }
@@ -308,6 +324,7 @@ pub fn apply_diff(
             {
                 match component_diff.op() {
                     ComponentDiffOp::Change(data) => {
+                        //TODO: Detect if we need to make the change in the world or as an override
                         let acceptor = ApplyDiffDeserializerAcceptor {
                             component_registration: &component_registration,
                             world: &mut new_world,
@@ -318,6 +335,7 @@ pub fn apply_diff(
                         bincode::with_deserializer(reader, acceptor);
                     }
                     ComponentDiffOp::Add(data) => {
+                        //TODO: Detect if we need to make the change in the world or as an override
                         let acceptor = DeserializeSingleDeserializerAcceptor {
                             component_registration: &component_registration,
                             world: &mut new_world,
@@ -328,6 +346,7 @@ pub fn apply_diff(
                         bincode::with_deserializer(reader, acceptor);
                     }
                     ComponentDiffOp::Remove => {
+                        //TODO: Detect if we need to make the change in the world or as an override
                         component_registration
                             .remove_from_entity(&mut new_world, *new_prefab_entity);
                     }

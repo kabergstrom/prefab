@@ -55,10 +55,15 @@ pub struct Prefab {
 
 impl Prefab {
     pub fn new(world: World) -> Self {
+        let mut entities = HashMap::new();
+        for entity in world.iter_entities() {
+            entities.insert(*uuid::Uuid::new_v4().as_bytes(), entity);
+        }
+
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
+            entities: entities,
             prefab_refs: Default::default(),
-            entities: Default::default(),
         };
 
         Prefab { world, prefab_meta }
