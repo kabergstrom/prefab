@@ -145,7 +145,10 @@ impl Transaction {
         &mut self.after_world
     }
 
-    pub fn uuid_to_entity(&self, uuid: EntityUuid) -> Option<Entity> {
+    pub fn uuid_to_entity(
+        &self,
+        uuid: EntityUuid,
+    ) -> Option<Entity> {
         self.uuid_to_entities[&uuid].after_entity()
     }
 

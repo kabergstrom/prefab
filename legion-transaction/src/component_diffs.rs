@@ -209,7 +209,7 @@ impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a>
 
 #[derive(Debug)]
 pub enum ApplyDiffToPrefabError {
-    PrefabHasOverrides
+    PrefabHasOverrides,
 }
 
 /// Applies a world diff to a prefab

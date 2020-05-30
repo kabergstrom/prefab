@@ -42,25 +42,30 @@ pub struct PrefabBuilder {
     // All known entities throughout the transaction
     uuid_to_entities: HashMap<EntityUuid, EntityInfo>,
 
-    parent_prefab: PrefabUuid
+    parent_prefab: PrefabUuid,
 }
 
 #[derive(Debug)]
 pub enum PrefabBuilderError {
     EntityDeleted,
     ComponentRemoved,
-    ComponentAdded
+    ComponentAdded,
 }
 
 impl PrefabBuilder {
-    pub fn new(prefab_uuid: PrefabUuid, prefab: CookedPrefab, universe: &Universe, clone_impl: &CopyCloneImpl) -> Self {
+    pub fn new(
+        prefab_uuid: PrefabUuid,
+        prefab: CookedPrefab,
+        universe: &Universe,
+        clone_impl: &CopyCloneImpl,
+    ) -> Self {
         let mut before_world = universe.create_world();
         let mut before_result_mappings = HashMap::new();
         before_world.clone_from(
             &prefab.world,
             clone_impl,
             &mut legion::world::HashMapCloneImplResult(&mut before_result_mappings),
-            &legion::world::NoneEntityReplacePolicy
+            &legion::world::NoneEntityReplacePolicy,
         );
 
         let mut after_world = universe.create_world();
@@ -69,7 +74,7 @@ impl PrefabBuilder {
             &prefab.world,
             clone_impl,
             &mut legion::world::HashMapCloneImplResult(&mut after_result_mappings),
-            &legion::world::NoneEntityReplacePolicy
+            &legion::world::NoneEntityReplacePolicy,
         );
 
         let mut uuid_to_entities = HashMap::new();
@@ -83,7 +88,7 @@ impl PrefabBuilder {
             before_world,
             after_world,
             uuid_to_entities,
-            parent_prefab: prefab_uuid
+            parent_prefab: prefab_uuid,
         }
     }
 
@@ -95,7 +100,10 @@ impl PrefabBuilder {
         &mut self.after_world
     }
 
-    pub fn uuid_to_entity(&self, uuid: EntityUuid) -> Option<Entity> {
+    pub fn uuid_to_entity(
+        &self,
+        uuid: EntityUuid,
+    ) -> Option<Entity> {
         self.uuid_to_entities.get(&uuid).map(|x| x.after_entity())
     }
 
@@ -110,7 +118,11 @@ impl PrefabBuilder {
 
         let mut preexisting_after_entities = HashSet::new();
         for (entity_uuid, entity_info) in &self.uuid_to_entities {
-            if self.after_world.get_entity_location(entity_info.after_entity()).is_none() {
+            if self
+                .after_world
+                .get_entity_location(entity_info.after_entity())
+                .is_none()
+            {
                 // Fail, an entity was deleted. This is not supported
                 return Err(PrefabBuilderError::EntityDeleted);
             }
@@ -121,7 +133,12 @@ impl PrefabBuilder {
         // Find the entities that have been added
         for after_entity in self.after_world.iter_entities() {
             if !preexisting_after_entities.contains(&after_entity) {
-                let new_entity = new_prefab_world.clone_from_single(&self.after_world, after_entity, clone_impl, None);
+                let new_entity = new_prefab_world.clone_from_single(
+                    &self.after_world,
+                    after_entity,
+                    clone_impl,
+                    None,
+                );
                 new_prefab_entities.insert(*uuid::Uuid::new_v4().as_bytes(), new_entity);
             }
         }
@@ -140,30 +157,28 @@ impl PrefabBuilder {
                     &self.before_world,
                     Some(entity_info.before_entity()),
                     &self.after_world,
-                    Some(entity_info.after_entity())
+                    Some(entity_info.after_entity()),
                 );
 
                 match result {
                     DiffSingleResult::NoChange => {
                         // Do nothing
-                    },
+                    }
                     DiffSingleResult::Change => {
                         // Store the change
                         component_overrides.push(ComponentOverride {
                             component_type: *component_type,
-                            data: ron_ser.into_output_string()
+                            data: ron_ser.into_output_string(),
                         })
                     }
                     DiffSingleResult::Add => {
                         // Fail, a component was added. This is not supported
                         return Err(PrefabBuilderError::ComponentAdded);
-
-                    },
+                    }
                     DiffSingleResult::Remove => {
                         // Fail, a component was deleted. This is not supported
                         return Err(PrefabBuilderError::ComponentRemoved);
-
-                    },
+                    }
                 }
             }
 
@@ -173,7 +188,7 @@ impl PrefabBuilder {
         }
 
         let prefab_ref = PrefabRef {
-            overrides: entity_overrides
+            overrides: entity_overrides,
         };
 
         let mut prefab_refs = HashMap::new();
@@ -182,12 +197,12 @@ impl PrefabBuilder {
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
             prefab_refs,
-            entities: new_prefab_entities
+            entities: new_prefab_entities,
         };
 
         Ok(Prefab {
             world: new_prefab_world,
-            prefab_meta
+            prefab_meta,
         })
     }
 }
