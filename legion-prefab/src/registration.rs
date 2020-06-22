@@ -170,7 +170,8 @@ pub enum DiffSingleResult {
     Remove,
 }
 
-type CompSerializeFn = unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize));
+type CompSerializeFn =
+    unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize));
 type CompDeserializeFn = fn(
     deserializer: &mut dyn erased_serde::Deserializer,
     get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
@@ -181,11 +182,8 @@ type DeserializeSingleFn = fn(
     &mut legion::world::World,
     legion::entity::Entity,
 ) -> Result<(), legion::world::EntityMutationError>;
-type SerializeSingleFn = fn(
-    &legion::world::World,
-    legion::entity::Entity,
-    &mut dyn FnMut(&dyn erased_serde::Serialize),
-);
+type SerializeSingleFn =
+    fn(&legion::world::World, legion::entity::Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
 type DiffSingleFn = fn(
     &mut dyn erased_serde::Serializer,
     &legion::world::World,
@@ -193,7 +191,8 @@ type DiffSingleFn = fn(
     &legion::world::World,
     Option<legion::entity::Entity>,
 ) -> DiffSingleResult;
-type ApplyDiffFn = fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity);
+type ApplyDiffFn =
+    fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity);
 type CompCloneFn = fn(*const u8, *mut u8, usize);
 type AddDefaultToEntityFn = fn(
     &mut legion::world::World,

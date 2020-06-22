@@ -4,9 +4,7 @@ use prefab_format::{EntityUuid, ComponentTypeUuid};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use legion_prefab::{ComponentRegistration, DiffSingleResult};
-use crate::component_diffs::{
-    ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff,
-};
+use crate::component_diffs::{ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff};
 use legion_prefab::CopyCloneImpl;
 use std::hash::BuildHasher;
 
@@ -226,7 +224,10 @@ impl Transaction {
             // Do diffs for each component type
             for (component_type, registration) in registered_components {
                 let mut apply_data = vec![];
-                let mut apply_ser = bincode::Serializer::new(&mut apply_data, bincode::config::DefaultOptions::new());
+                let mut apply_ser = bincode::Serializer::new(
+                    &mut apply_data,
+                    bincode::config::DefaultOptions::new(),
+                );
                 let mut apply_ser_erased = erased_serde::Serializer::erase(&mut apply_ser);
 
                 let apply_result = registration.diff_single(
@@ -239,7 +240,10 @@ impl Transaction {
 
                 if apply_result != DiffSingleResult::NoChange {
                     let mut revert_data = vec![];
-                    let mut revert_ser = bincode::Serializer::new(&mut revert_data, bincode::config::DefaultOptions::new());
+                    let mut revert_ser = bincode::Serializer::new(
+                        &mut revert_data,
+                        bincode::config::DefaultOptions::new(),
+                    );
                     let mut revert_ser_erased = erased_serde::Serializer::erase(&mut revert_ser);
 
                     let revert_result = registration.diff_single(

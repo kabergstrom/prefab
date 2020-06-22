@@ -250,15 +250,26 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
                 match component_diff.op() {
                     ComponentDiffOp::Change(data) => {
                         //TODO: Detect if we need to make the change in the world or as an override
-                        let mut deserializer = bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(data.as_slice(), bincode::config::DefaultOptions::new());
+                        let mut deserializer =
+                            bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(
+                                data.as_slice(),
+                                bincode::config::DefaultOptions::new(),
+                            );
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        component_registration
-                            .apply_diff(&mut de_erased, &mut new_world, *new_prefab_entity);
+                        component_registration.apply_diff(
+                            &mut de_erased,
+                            &mut new_world,
+                            *new_prefab_entity,
+                        );
                     }
                     ComponentDiffOp::Add(data) => {
                         //TODO: Detect if we need to make the change in the world or as an override
-                        let mut deserializer = bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(data, bincode::config::DefaultOptions::new());
+                        let mut deserializer =
+                            bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(
+                                data,
+                                bincode::config::DefaultOptions::new(),
+                            );
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
                         component_registration
