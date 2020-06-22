@@ -8,7 +8,7 @@ edition = "2018"
 prefab-format = { path = "../prefab-format" }
 serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
-legion = { git = "https://github.com/aclysma/legion", default-features = false, features = ["serialize"], branch="minimum" }
+legion = { version = "0.2.4", default-features = false, features = ["serialize"] }
 inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }

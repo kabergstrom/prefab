@@ -145,7 +145,7 @@ impl<'b, 'c, 'd, 'e> bincode::SerializerAcceptor for DiffSingleSerializerAccepto
 
     //TODO: Error handling needs to be passed back out
     fn accept<T: serde::Serializer>(
-        mut self,
+        self,
         ser: T,
     ) -> Self::Output
     where
@@ -175,7 +175,7 @@ impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a> for ApplyDiffDeserializerAcce
 
     //TODO: Error handling needs to be passed back out
     fn accept<T: serde::Deserializer<'a>>(
-        mut self,
+        self,
         de: T,
     ) -> Self::Output {
         let mut de_erased = erased_serde::Deserializer::erase(de);
@@ -198,12 +198,13 @@ impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a>
 
     //TODO: Error handling needs to be passed back out
     fn accept<T: serde::Deserializer<'a>>(
-        mut self,
+        self,
         de: T,
     ) -> Self::Output {
         let mut de_erased = erased_serde::Deserializer::erase(de);
         self.component_registration
-            .deserialize_single(&mut de_erased, self.world, self.entity);
+            .deserialize_single(&mut de_erased, self.world, self.entity)
+            .unwrap();
     }
 }
 
@@ -347,8 +348,10 @@ pub fn apply_diff(
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override
+                        //TODO: propagate error
                         component_registration
-                            .remove_from_entity(&mut new_world, *new_prefab_entity);
+                            .remove_from_entity(&mut new_world, *new_prefab_entity)
+                            .unwrap();
                     }
                 }
             }

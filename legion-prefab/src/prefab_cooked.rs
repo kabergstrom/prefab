@@ -30,16 +30,8 @@ impl Serialize for CookedPrefab {
                 )
             }));
         let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations().map(|reg| {
-                (
-                    legion::storage::ComponentTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }),
+            crate::registration::iter_component_registrations()
+                .map(|reg| (reg.component_type_id(), reg.clone())),
         );
 
         let mut entity_map = HashMap::with_capacity(self.entities.len());
@@ -137,16 +129,8 @@ impl<'de> Deserialize<'de> for WorldDeser {
                 )
             }));
         let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations().map(|reg| {
-                (
-                    legion::storage::ComponentTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }),
+            crate::registration::iter_component_registrations()
+                .map(|reg| (reg.component_type_id(), reg.clone())),
         );
         let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
 

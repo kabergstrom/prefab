@@ -49,7 +49,7 @@ pub fn cook_prefab(
         let prefab = prefab_lookup[prefab_id];
 
         // Iterate all the other prefabs that this prefab references
-        for (dependency_prefab_id, dependency_prefab_ref) in &prefab.prefab_meta.prefab_refs {
+        for (_, dependency_prefab_ref) in &prefab.prefab_meta.prefab_refs {
             // Iterate all the entities for which we have override data
             for (entity_id, component_overrides) in &dependency_prefab_ref.overrides {
                 // Find where this entity is stored within the cooked data

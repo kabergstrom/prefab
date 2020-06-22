@@ -8,6 +8,7 @@ use serde_diff::SerdeDiff;
 use std::{any::TypeId, marker::PhantomData, ptr::NonNull};
 use type_uuid::TypeUuid;
 use legion::storage::ComponentTypeId;
+use legion::prelude::EntityStore;
 
 struct ComponentDeserializer<'de, T: Deserialize<'de>> {
     ptr: *mut T,
@@ -171,6 +172,7 @@ pub enum DiffSingleResult {
 
 #[derive(Clone)]
 pub struct ComponentRegistration {
+    pub(crate) component_type_id: ComponentTypeId,
     pub(crate) uuid: type_uuid::Bytes,
     pub(crate) ty: TypeId,
     pub(crate) meta: ComponentMeta,
@@ -222,11 +224,7 @@ impl ComponentRegistration {
     }
 
     pub fn component_type_id(&self) -> ComponentTypeId {
-        ComponentTypeId(
-            self.ty(),
-            #[cfg(feature = "ffi")]
-            0,
-        )
+        self.component_type_id
     }
 
     pub fn meta(&self) -> &ComponentMeta {
@@ -311,9 +309,11 @@ impl ComponentRegistration {
             + Default
             + 'static,
     >() -> Self {
+        let component_type_id = ComponentTypeId::of::<T>();
         Self {
+            component_type_id: ComponentTypeId::of::<T>(),
             uuid: T::UUID,
-            ty: TypeId::of::<T>(),
+            ty: component_type_id.type_id(),
             meta: ComponentMeta::of::<T>(),
             type_name: std::any::type_name::<T>(),
             comp_serialize_fn: |comp_storage, serialize_fn| unsafe {
@@ -348,8 +348,8 @@ impl ComponentRegistration {
             },
             diff_single_fn: |ser, src_world, src_entity, dst_world, dst_entity| {
                 // TODO propagate error
-                let mut src_comp = src_entity.map_or(None, |e| src_world.get_component::<T>(e));
-                let mut dst_comp = dst_entity.map_or(None, |e| dst_world.get_component::<T>(e));
+                let src_comp = src_entity.map_or(None, |e| src_world.get_component::<T>(e));
+                let dst_comp = dst_entity.map_or(None, |e| dst_world.get_component::<T>(e));
 
                 if let (Some(src_comp), Some(dst_comp)) = (&src_comp, &dst_comp) {
                     //
@@ -370,9 +370,9 @@ impl ComponentRegistration {
                     //
                     // Component was created, serialize the object and return an Add result
                     //
-                    erased_serde::serialize(&**dst_comp, ser);
+                    erased_serde::serialize(&**dst_comp, ser).unwrap();
                     DiffSingleResult::Add
-                } else if let Some(src_comp) = &src_comp {
+                } else if let Some(_) = &src_comp {
                     //
                     // Component was removed, do not serialize anything and return a Remove result
                     //

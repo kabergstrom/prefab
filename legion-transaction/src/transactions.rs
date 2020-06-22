@@ -37,7 +37,7 @@ impl TransactionBuilder {
     }
 
     pub fn begin(
-        mut self,
+        self,
         universe: &Universe,
         src_world: &World,
         clone_impl: &CopyCloneImpl,

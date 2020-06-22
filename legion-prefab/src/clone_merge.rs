@@ -24,24 +24,17 @@ impl<'a> legion::world::CloneImpl for CopyCloneImpl<'a> {
         component_type: ComponentTypeId,
     ) -> (ComponentTypeId, ComponentMeta) {
         let comp_reg = &self.components[&component_type];
-        (
-            ComponentTypeId(
-                comp_reg.ty(),
-                #[cfg(feature = "ffi")]
-                0,
-            ),
-            comp_reg.meta().clone(),
-        )
+        (comp_reg.component_type_id(), comp_reg.meta().clone())
     }
 
     fn clone_components(
         &self,
-        src_world: &World,
-        src_component_storage: &ComponentStorage,
-        src_component_storage_indexes: Range<ComponentIndex>,
+        _src_world: &World,
+        _src_component_storage: &ComponentStorage,
+        _src_component_storage_indexes: Range<ComponentIndex>,
         src_type: ComponentTypeId,
-        src_entities: &[Entity],
-        dst_entities: &[Entity],
+        _src_entities: &[Entity],
+        _dst_entities: &[Entity],
         src_data: *const u8,
         dst_data: *mut u8,
         num_components: usize,
@@ -315,14 +308,7 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
             (handler.dst_type_id(), handler.dst_type_meta())
         } else {
             let comp_reg = &self.components[&component_type];
-            (
-                ComponentTypeId(
-                    comp_reg.ty(),
-                    #[cfg(feature = "ffi")]
-                    0,
-                ),
-                comp_reg.meta().clone(),
-            )
+            (comp_reg.component_type_id(), comp_reg.meta().clone())
         }
     }
 
