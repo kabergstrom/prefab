@@ -8,6 +8,7 @@ use crate::component_diffs::{
     ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff,
 };
 use legion_prefab::CopyCloneImpl;
+use std::hash::BuildHasher;
 
 struct TransactionBuilderEntityInfo {
     entity_uuid: EntityUuid,
@@ -36,11 +37,11 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn begin(
+    pub fn begin<S: BuildHasher>(
         self,
         universe: &Universe,
         src_world: &World,
-        clone_impl: &CopyCloneImpl,
+        clone_impl: &CopyCloneImpl<S>,
     ) -> Transaction {
         let mut before_world = universe.create_world();
         let mut after_world = universe.create_world();

@@ -62,7 +62,7 @@ impl Prefab {
 
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
-            entities: entities,
+            entities,
             prefab_refs: Default::default(),
         };
 

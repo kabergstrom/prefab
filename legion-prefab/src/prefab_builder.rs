@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::{ComponentRegistration, DiffSingleResult, ComponentOverride, PrefabMeta, PrefabRef};
 use crate::{CookedPrefab, CopyCloneImpl, Prefab};
+use fnv::FnvHashMap;
+use std::hash::BuildHasher;
 
 pub struct EntityInfo {
     before_entity: Entity,
@@ -40,7 +42,7 @@ pub struct PrefabBuilder {
     after_world: legion::world::World,
 
     // All known entities throughout the transaction
-    uuid_to_entities: HashMap<EntityUuid, EntityInfo>,
+    uuid_to_entities: FnvHashMap<EntityUuid, EntityInfo>,
 
     parent_prefab: PrefabUuid,
 }
@@ -53,11 +55,11 @@ pub enum PrefabBuilderError {
 }
 
 impl PrefabBuilder {
-    pub fn new(
+    pub fn new<S: BuildHasher>(
         prefab_uuid: PrefabUuid,
         prefab: CookedPrefab,
         universe: &Universe,
-        clone_impl: &CopyCloneImpl,
+        clone_impl: &CopyCloneImpl<S>,
     ) -> Self {
         let mut before_world = universe.create_world();
         let mut before_result_mappings = HashMap::new();
@@ -77,7 +79,7 @@ impl PrefabBuilder {
             &legion::world::NoneEntityReplacePolicy,
         );
 
-        let mut uuid_to_entities = HashMap::new();
+        let mut uuid_to_entities = FnvHashMap::default();
         for (uuid, entity) in &prefab.entities {
             let before_entity = before_result_mappings[entity];
             let after_entity = after_result_mappings[entity];
@@ -107,17 +109,17 @@ impl PrefabBuilder {
         self.uuid_to_entities.get(&uuid).map(|x| x.after_entity())
     }
 
-    pub fn create_prefab(
+    pub fn create_prefab<S: BuildHasher>(
         &mut self,
         universe: &Universe,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-        clone_impl: &CopyCloneImpl,
+        clone_impl: &CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = universe.create_world();
         let mut new_prefab_entities = HashMap::new();
 
         let mut preexisting_after_entities = HashSet::new();
-        for (_, entity_info) in &self.uuid_to_entities {
+        for entity_info in self.uuid_to_entities.values() {
             if self
                 .after_world
                 .get_entity_location(entity_info.after_entity())

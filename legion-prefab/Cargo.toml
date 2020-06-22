@@ -13,6 +13,7 @@ inventory = "0.1"
 type-uuid = "0.1"
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
 serde-diff = "0.3"
+fnv = "1.0"
 
 # This is required because ComponentOverride::data has a string that for now is encoded RON
 ron = "0.5"

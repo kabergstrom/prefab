@@ -3,13 +3,14 @@ use legion::storage::ComponentTypeId;
 use std::collections::HashMap;
 use crate::{CookedPrefab, Prefab, ComponentRegistration, CopyCloneImpl};
 use prefab_format::{PrefabUuid, ComponentTypeUuid};
+use std::hash::BuildHasher;
 
-pub fn cook_prefab(
+pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     universe: &Universe,
-    registered_components: &HashMap<ComponentTypeId, ComponentRegistration>,
-    registered_components_by_uuid: &HashMap<ComponentTypeUuid, ComponentRegistration>,
+    registered_components: &HashMap<ComponentTypeId, ComponentRegistration, S>,
+    registered_components_by_uuid: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
     prefab_cook_order: &[PrefabUuid],
-    prefab_lookup: &HashMap<PrefabUuid, &Prefab>,
+    prefab_lookup: &HashMap<PrefabUuid, &Prefab, U>,
 ) -> CookedPrefab {
     // Create the clone_merge impl. For prefab cooking, we will clone everything so we don't need to
     // set up any transformations
@@ -21,7 +22,7 @@ pub fn cook_prefab(
     let mut world = universe.create_world();
     // merge all entity data from all prefabs. This data doesn't include any overrides, so order
     // doesn't matter
-    for (_, prefab) in prefab_lookup {
+    for prefab in prefab_lookup.values() {
         // Clone all the entities from the prefab into the cooked world. As the data is copied,
         // entity will get a new Entity assigned to it in the cooked world. result_mappings will
         // be populated as this happens so that we can trace where data in the prefab landed in
@@ -49,7 +50,7 @@ pub fn cook_prefab(
         let prefab = prefab_lookup[prefab_id];
 
         // Iterate all the other prefabs that this prefab references
-        for (_, dependency_prefab_ref) in &prefab.prefab_meta.prefab_refs {
+        for dependency_prefab_ref in prefab.prefab_meta.prefab_refs.values() {
             // Iterate all the entities for which we have override data
             for (entity_id, component_overrides) in &dependency_prefab_ref.overrides {
                 // Find where this entity is stored within the cooked data
@@ -72,7 +73,7 @@ pub fn cook_prefab(
 
     // the resulting world can now be saved
     crate::CookedPrefab {
-        world: world,
+        world,
         entities: entity_lookup,
     }
 }

@@ -6,6 +6,7 @@ use legion::prelude::*;
 use legion_prefab::DiffSingleResult;
 use legion_prefab::ComponentRegistration;
 use legion_prefab::CopyCloneImpl;
+use std::hash::BuildHasher;
 
 #[derive(Clone, Debug)]
 pub enum EntityDiffOp {
@@ -140,12 +141,12 @@ pub enum ApplyDiffToPrefabError {
 ///
 /// This is currently only supported for prefabs that have no overrides. If there is an override,
 /// None will be returned
-pub fn apply_diff_to_prefab(
+pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     prefab: &Prefab,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
+    clone_impl: &CopyCloneImpl<S>,
 ) -> Result<Prefab, ApplyDiffToPrefabError> {
     if !prefab.prefab_meta.prefab_refs.is_empty() {
         return Err(ApplyDiffToPrefabError::PrefabHasOverrides);
@@ -173,12 +174,12 @@ pub fn apply_diff_to_prefab(
 }
 
 /// Applies a world diff to a cooked prefab
-pub fn apply_diff_to_cooked_prefab(
+pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
     cooked_prefab: &CookedPrefab,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
+    clone_impl: &CopyCloneImpl<S>,
 ) -> CookedPrefab {
     let (new_world, uuid_to_new_entities) = apply_diff(
         &cooked_prefab.world,
@@ -195,13 +196,13 @@ pub fn apply_diff_to_cooked_prefab(
     }
 }
 
-pub fn apply_diff(
+pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     world: &World,
-    uuid_to_entity: &HashMap<EntityUuid, Entity>,
+    uuid_to_entity: &HashMap<EntityUuid, Entity, T>,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, U>,
+    clone_impl: &CopyCloneImpl<S>,
 ) -> (World, HashMap<EntityUuid, Entity>) {
     // Create an empty world to populate
     let mut new_world = universe.create_world();

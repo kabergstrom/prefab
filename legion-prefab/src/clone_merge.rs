@@ -5,28 +5,31 @@ use legion::prelude::*;
 use std::mem::MaybeUninit;
 use std::ops::Range;
 use legion::index::ComponentIndex;
+use std::hash::BuildHasher;
 
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
-pub struct CopyCloneImpl<'a> {
-    components: &'a HashMap<ComponentTypeId, ComponentRegistration>,
+pub struct CopyCloneImpl<'a, S: BuildHasher> {
+    components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>,
 }
 
-impl<'a> CopyCloneImpl<'a> {
-    pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration>) -> Self {
+impl<'a, S: BuildHasher> CopyCloneImpl<'a, S> {
+    pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>) -> Self {
         Self { components }
     }
 }
 
-impl<'a> legion::world::CloneImpl for CopyCloneImpl<'a> {
+impl<'a, S: BuildHasher> legion::world::CloneImpl for CopyCloneImpl<'a, S> {
     fn map_component_type(
         &self,
         component_type: ComponentTypeId,
     ) -> (ComponentTypeId, ComponentMeta) {
         let comp_reg = &self.components[&component_type];
-        (comp_reg.component_type_id(), comp_reg.meta().clone())
+        (comp_reg.component_type_id(), *comp_reg.meta())
     }
 
+    //TODO: Would be better if CloneImpl defined clone_components as unsafe
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn clone_components(
         &self,
         _src_world: &World,
@@ -51,6 +54,7 @@ pub trait SpawnFrom<FromT: Sized>
 where
     Self: Sized,
 {
+    #[allow(clippy::too_many_arguments)]
     fn spawn_from(
         src_world: &World,
         src_component_storage: &ComponentStorage,
@@ -68,6 +72,7 @@ pub trait SpawnInto<IntoT: Sized>
 where
     Self: Sized,
 {
+    #[allow(clippy::too_many_arguments)]
     fn spawn_into(
         src_world: &World,
         src_component_storage: &ComponentStorage,
@@ -109,6 +114,7 @@ where
 }
 
 /// A registry of handlers for use with SpawnCloneImpl
+#[derive(Default)]
 pub struct SpawnCloneImplHandlerSet {
     handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>,
 }
@@ -116,9 +122,7 @@ pub struct SpawnCloneImplHandlerSet {
 impl SpawnCloneImplHandlerSet {
     /// Creates a new registry of handlers
     pub fn new() -> Self {
-        Self {
-            handlers: Default::default(),
-        }
+        Self::default()
     }
 
     /// Adds a mapping from one component type to another. Rust's standard library into() will be
@@ -308,10 +312,12 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
             (handler.dst_type_id(), handler.dst_type_meta())
         } else {
             let comp_reg = &self.components[&component_type];
-            (comp_reg.component_type_id(), comp_reg.meta().clone())
+            (comp_reg.component_type_id(), *comp_reg.meta())
         }
     }
 
+    //TODO: Would be better if CloneImpl defined clone_components as unsafe
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn clone_components(
         &self,
         src_world: &World,
@@ -353,6 +359,8 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
 trait SpawnCloneImplMapping: Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
     fn dst_type_meta(&self) -> ComponentMeta;
+
+    #[allow(clippy::too_many_arguments)]
     fn clone_components(
         &self,
         src_world: &World,
