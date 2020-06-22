@@ -117,7 +117,7 @@ impl PrefabBuilder {
         let mut new_prefab_entities = HashMap::new();
 
         let mut preexisting_after_entities = HashSet::new();
-        for (entity_uuid, entity_info) in &self.uuid_to_entities {
+        for (_, entity_info) in &self.uuid_to_entities {
             if self
                 .after_world
                 .get_entity_location(entity_info.after_entity())

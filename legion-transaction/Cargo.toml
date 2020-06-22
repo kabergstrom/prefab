@@ -16,4 +16,4 @@ uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
 log="0.4"
 # We need this PR (https://github.com/servo/bincode/pull/288) but it's not published yet
 #bincode = "1.2"
-bincode = { git = "https://github.com/servo/bincode.git", rev="e30e91e3a" }
+bincode = { git = "https://github.com/servo/bincode.git", rev="439b12dbcba903b7681879f96f932dc20b0a5115" }

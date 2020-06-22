@@ -131,83 +131,6 @@ impl WorldDiff {
     }
 }
 
-pub struct DiffSingleSerializerAcceptor<'b, 'c, 'd, 'e> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub src_world: &'c World,
-    pub src_entity: Option<Entity>,
-    pub dst_world: &'d World,
-    pub dst_entity: Option<Entity>,
-    pub result: &'e mut legion_prefab::DiffSingleResult,
-}
-
-impl<'b, 'c, 'd, 'e> bincode::SerializerAcceptor for DiffSingleSerializerAcceptor<'b, 'c, 'd, 'e> {
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Serializer>(
-        self,
-        ser: T,
-    ) -> Self::Output
-    where
-        T::Ok: 'static,
-    {
-        let mut ser_erased = erased_serde::Serializer::erase(ser);
-
-        *self.result = self.component_registration.diff_single(
-            &mut ser_erased,
-            self.src_world,
-            self.src_entity,
-            self.dst_world,
-            self.dst_entity,
-        )
-    }
-}
-
-// Used when we process a ComponentDiffOp::Change
-pub struct ApplyDiffDeserializerAcceptor<'b, 'c> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub world: &'c mut World,
-    pub entity: Entity,
-}
-
-impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a> for ApplyDiffDeserializerAcceptor<'b, 'c> {
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Deserializer<'a>>(
-        self,
-        de: T,
-    ) -> Self::Output {
-        let mut de_erased = erased_serde::Deserializer::erase(de);
-        self.component_registration
-            .apply_diff(&mut de_erased, self.world, self.entity);
-    }
-}
-
-// Used when we process a ComponentDiffOp::Add
-pub struct DeserializeSingleDeserializerAcceptor<'b, 'c> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub world: &'c mut World,
-    pub entity: Entity,
-}
-
-impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a>
-    for DeserializeSingleDeserializerAcceptor<'b, 'c>
-{
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Deserializer<'a>>(
-        self,
-        de: T,
-    ) -> Self::Output {
-        let mut de_erased = erased_serde::Deserializer::erase(de);
-        self.component_registration
-            .deserialize_single(&mut de_erased, self.world, self.entity)
-            .unwrap();
-    }
-}
-
 #[derive(Debug)]
 pub enum ApplyDiffToPrefabError {
     PrefabHasOverrides,
@@ -326,25 +249,20 @@ pub fn apply_diff(
                 match component_diff.op() {
                     ComponentDiffOp::Change(data) => {
                         //TODO: Detect if we need to make the change in the world or as an override
-                        let acceptor = ApplyDiffDeserializerAcceptor {
-                            component_registration: &component_registration,
-                            world: &mut new_world,
-                            entity: *new_prefab_entity,
-                        };
+                        let mut deserializer = bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(data.as_slice(), bincode::config::DefaultOptions::new());
+                        let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        let reader = bincode::SliceReader::new(data);
-                        bincode::with_deserializer(reader, acceptor);
+                        component_registration
+                            .apply_diff(&mut de_erased, &mut new_world, *new_prefab_entity);
                     }
                     ComponentDiffOp::Add(data) => {
                         //TODO: Detect if we need to make the change in the world or as an override
-                        let acceptor = DeserializeSingleDeserializerAcceptor {
-                            component_registration: &component_registration,
-                            world: &mut new_world,
-                            entity: *new_prefab_entity,
-                        };
+                        let mut deserializer = bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(data, bincode::config::DefaultOptions::new());
+                        let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        let reader = bincode::SliceReader::new(data);
-                        bincode::with_deserializer(reader, acceptor);
+                        component_registration
+                            .deserialize_single(&mut de_erased, &mut new_world, *new_prefab_entity)
+                            .unwrap();
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override
