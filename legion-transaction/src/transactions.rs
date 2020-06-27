@@ -4,10 +4,9 @@ use prefab_format::{EntityUuid, ComponentTypeUuid};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use legion_prefab::{ComponentRegistration, DiffSingleResult};
-use crate::component_diffs::{
-    DiffSingleSerializerAcceptor, ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff,
-};
-use crate::CopyCloneImpl;
+use crate::component_diffs::{ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff};
+use legion_prefab::CopyCloneImpl;
+use std::hash::BuildHasher;
 
 struct TransactionBuilderEntityInfo {
     entity_uuid: EntityUuid,
@@ -36,11 +35,11 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn begin(
-        mut self,
+    pub fn begin<S: BuildHasher>(
+        self,
         universe: &Universe,
         src_world: &World,
-        clone_impl: &CopyCloneImpl,
+        clone_impl: &CopyCloneImpl<S>,
     ) -> Transaction {
         let mut before_world = universe.create_world();
         let mut after_world = universe.create_world();
@@ -145,6 +144,13 @@ impl Transaction {
         &mut self.after_world
     }
 
+    pub fn uuid_to_entity(
+        &self,
+        uuid: EntityUuid,
+    ) -> Option<Entity> {
+        self.uuid_to_entities[&uuid].after_entity()
+    }
+
     pub fn create_transaction_diffs(
         &mut self,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
@@ -217,30 +223,36 @@ impl Transaction {
         for (entity_uuid, entity_info) in &self.uuid_to_entities {
             // Do diffs for each component type
             for (component_type, registration) in registered_components {
-                let mut apply_result = DiffSingleResult::NoChange;
-                let apply_acceptor = DiffSingleSerializerAcceptor {
-                    component_registration: &registration,
-                    src_world: &self.before_world,
-                    src_entity: entity_info.before_entity,
-                    dst_world: &self.after_world,
-                    dst_entity: entity_info.after_entity,
-                    result: &mut apply_result,
-                };
                 let mut apply_data = vec![];
-                bincode::with_serializer(&mut apply_data, apply_acceptor);
+                let mut apply_ser = bincode::Serializer::new(
+                    &mut apply_data,
+                    bincode::config::DefaultOptions::new(),
+                );
+                let mut apply_ser_erased = erased_serde::Serializer::erase(&mut apply_ser);
+
+                let apply_result = registration.diff_single(
+                    &mut apply_ser_erased,
+                    &self.before_world,
+                    entity_info.before_entity,
+                    &self.after_world,
+                    entity_info.after_entity,
+                );
 
                 if apply_result != DiffSingleResult::NoChange {
-                    let mut revert_result = DiffSingleResult::NoChange;
-                    let revert_acceptor = DiffSingleSerializerAcceptor {
-                        component_registration: &registration,
-                        src_world: &self.after_world,
-                        src_entity: entity_info.after_entity,
-                        dst_world: &self.before_world,
-                        dst_entity: entity_info.before_entity,
-                        result: &mut revert_result,
-                    };
                     let mut revert_data = vec![];
-                    bincode::with_serializer(&mut revert_data, revert_acceptor);
+                    let mut revert_ser = bincode::Serializer::new(
+                        &mut revert_data,
+                        bincode::config::DefaultOptions::new(),
+                    );
+                    let mut revert_ser_erased = erased_serde::Serializer::erase(&mut revert_ser);
+
+                    let revert_result = registration.diff_single(
+                        &mut revert_ser_erased,
+                        &self.after_world,
+                        entity_info.after_entity,
+                        &self.before_world,
+                        entity_info.before_entity,
+                    );
 
                     apply_component_diffs.push(
                         ComponentDiff::new_from_diff_single_result(

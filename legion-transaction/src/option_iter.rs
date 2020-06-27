@@ -1,4 +1,3 @@
-
 use core::ops::Range;
 use legion::storage::ComponentStorage;
 use legion::storage::ComponentTypeId;
@@ -11,16 +10,16 @@ use legion::index::ComponentIndex;
 ///
 /// This iterator is intended for zipping an Option<Iter> with other Iters
 pub struct OptionIter<T, U>
-    where
-        T: std::iter::Iterator<Item = U>,
+where
+    T: std::iter::Iterator<Item = U>,
 {
     opt: Option<T>,
     count: usize,
 }
 
 impl<T, U> OptionIter<T, U>
-    where
-        T: std::iter::Iterator<Item = U>,
+where
+    T: std::iter::Iterator<Item = U>,
 {
     fn new(
         opt: Option<T>,
@@ -31,13 +30,13 @@ impl<T, U> OptionIter<T, U>
 }
 
 impl<T, U> std::iter::Iterator for OptionIter<T, U>
-    where
-        T: std::iter::Iterator<Item = U>,
+where
+    T: std::iter::Iterator<Item = U>,
 {
     type Item = Option<U>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.count <= 0 {
+        if self.count == 0 {
             return None;
         }
 
@@ -56,9 +55,7 @@ fn option_iter_from_slice<X>(
     OptionIter::new(mapped, range.end - range.start)
 }
 
-fn get_components_in_storage<T: Component>(
-    component_storage: &ComponentStorage
-) -> Option<&[T]> {
+fn get_components_in_storage<T: Component>(component_storage: &ComponentStorage) -> Option<&[T]> {
     unsafe {
         component_storage
             .components(ComponentTypeId::of::<T>())

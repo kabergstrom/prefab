@@ -8,6 +8,7 @@ use serde_diff::SerdeDiff;
 use std::{any::TypeId, marker::PhantomData, ptr::NonNull};
 use type_uuid::TypeUuid;
 use legion::storage::ComponentTypeId;
+use legion::prelude::EntityStore;
 
 struct ComponentDeserializer<'de, T: Deserialize<'de>> {
     ptr: *mut T,
@@ -169,47 +170,56 @@ pub enum DiffSingleResult {
     Remove,
 }
 
+type CompSerializeFn =
+    unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize));
+type CompDeserializeFn = fn(
+    deserializer: &mut dyn erased_serde::Deserializer,
+    get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
+) -> Result<(), erased_serde::Error>;
+type CompRegisterFn = fn(&mut ArchetypeDescription);
+type DeserializeSingleFn = fn(
+    &mut dyn erased_serde::Deserializer,
+    &mut legion::world::World,
+    legion::entity::Entity,
+) -> Result<(), legion::world::EntityMutationError>;
+type SerializeSingleFn =
+    fn(&legion::world::World, legion::entity::Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
+type DiffSingleFn = fn(
+    &mut dyn erased_serde::Serializer,
+    &legion::world::World,
+    Option<legion::entity::Entity>,
+    &legion::world::World,
+    Option<legion::entity::Entity>,
+) -> DiffSingleResult;
+type ApplyDiffFn =
+    fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity);
+type CompCloneFn = fn(*const u8, *mut u8, usize);
+type AddDefaultToEntityFn = fn(
+    &mut legion::world::World,
+    legion::entity::Entity,
+) -> Result<(), legion::world::EntityMutationError>;
+type RemoveFromEntityFn = fn(
+    &mut legion::world::World,
+    legion::entity::Entity,
+) -> Result<(), legion::world::EntityMutationError>;
+
 #[derive(Clone)]
 pub struct ComponentRegistration {
+    pub(crate) component_type_id: ComponentTypeId,
     pub(crate) uuid: type_uuid::Bytes,
     pub(crate) ty: TypeId,
     pub(crate) meta: ComponentMeta,
     pub(crate) type_name: &'static str,
-    pub(crate) comp_serialize_fn:
-        unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize)),
-    pub(crate) comp_deserialize_fn: fn(
-        deserializer: &mut dyn erased_serde::Deserializer,
-        get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
-    ) -> Result<(), erased_serde::Error>,
-    pub(crate) register_comp_fn: fn(&mut ArchetypeDescription),
-    pub(crate) deserialize_single_fn: fn(
-        &mut dyn erased_serde::Deserializer,
-        &mut legion::world::World,
-        legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError>,
-    pub(crate) serialize_single_fn: fn(
-        &legion::world::World,
-        legion::entity::Entity,
-        &mut dyn FnMut(&dyn erased_serde::Serialize),
-    ),
-    pub(crate) diff_single_fn: fn(
-        &mut dyn erased_serde::Serializer,
-        &legion::world::World,
-        Option<legion::entity::Entity>,
-        &legion::world::World,
-        Option<legion::entity::Entity>,
-    ) -> DiffSingleResult,
-    pub(crate) apply_diff_fn:
-        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
-    pub(crate) comp_clone_fn: fn(*const u8, *mut u8, usize),
-    pub(crate) add_default_to_entity_fn: fn(
-        &mut legion::world::World,
-        legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError>,
-    pub(crate) remove_from_entity_fn: fn(
-        &mut legion::world::World,
-        legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError>,
+    pub(crate) comp_serialize_fn: CompSerializeFn,
+    pub(crate) comp_deserialize_fn: CompDeserializeFn,
+    pub(crate) register_comp_fn: CompRegisterFn,
+    pub(crate) deserialize_single_fn: DeserializeSingleFn,
+    pub(crate) serialize_single_fn: SerializeSingleFn,
+    pub(crate) diff_single_fn: DiffSingleFn,
+    pub(crate) apply_diff_fn: ApplyDiffFn,
+    pub(crate) comp_clone_fn: CompCloneFn,
+    pub(crate) add_default_to_entity_fn: AddDefaultToEntityFn,
+    pub(crate) remove_from_entity_fn: RemoveFromEntityFn,
 }
 
 impl ComponentRegistration {
@@ -222,11 +232,7 @@ impl ComponentRegistration {
     }
 
     pub fn component_type_id(&self) -> ComponentTypeId {
-        ComponentTypeId(
-            self.ty(),
-            #[cfg(feature = "ffi")]
-            0,
-        )
+        self.component_type_id
     }
 
     pub fn meta(&self) -> &ComponentMeta {
@@ -282,6 +288,7 @@ impl ComponentRegistration {
         (self.apply_diff_fn)(de, world, entity);
     }
 
+    #[allow(clippy::missing_safety_doc)]
     pub unsafe fn clone_components(
         &self,
         src: *const u8,
@@ -311,9 +318,11 @@ impl ComponentRegistration {
             + Default
             + 'static,
     >() -> Self {
+        let component_type_id = ComponentTypeId::of::<T>();
         Self {
+            component_type_id: ComponentTypeId::of::<T>(),
             uuid: T::UUID,
-            ty: TypeId::of::<T>(),
+            ty: component_type_id.type_id(),
             meta: ComponentMeta::of::<T>(),
             type_name: std::any::type_name::<T>(),
             comp_serialize_fn: |comp_storage, serialize_fn| unsafe {
@@ -348,8 +357,8 @@ impl ComponentRegistration {
             },
             diff_single_fn: |ser, src_world, src_entity, dst_world, dst_entity| {
                 // TODO propagate error
-                let mut src_comp = src_entity.map_or(None, |e| src_world.get_component::<T>(e));
-                let mut dst_comp = dst_entity.map_or(None, |e| dst_world.get_component::<T>(e));
+                let src_comp = src_entity.and_then(|e| src_world.get_component::<T>(e));
+                let dst_comp = dst_entity.and_then(|e| dst_world.get_component::<T>(e));
 
                 if let (Some(src_comp), Some(dst_comp)) = (&src_comp, &dst_comp) {
                     //
@@ -370,9 +379,9 @@ impl ComponentRegistration {
                     //
                     // Component was created, serialize the object and return an Add result
                     //
-                    erased_serde::serialize(&**dst_comp, ser);
+                    erased_serde::serialize(&**dst_comp, ser).unwrap();
                     DiffSingleResult::Add
-                } else if let Some(src_comp) = &src_comp {
+                } else if src_comp.is_some() {
                     //
                     // Component was removed, do not serialize anything and return a Remove result
                     //

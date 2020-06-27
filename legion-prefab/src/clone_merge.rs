@@ -1,47 +1,43 @@
 use std::collections::HashMap;
-use legion_prefab::ComponentRegistration;
+use crate::ComponentRegistration;
 use legion::storage::{ComponentMeta, ComponentTypeId, Component, ComponentStorage};
 use legion::prelude::*;
 use std::mem::MaybeUninit;
 use std::ops::Range;
 use legion::index::ComponentIndex;
+use std::hash::BuildHasher;
 
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
-pub struct CopyCloneImpl<'a> {
-    components: &'a HashMap<ComponentTypeId, ComponentRegistration>,
+pub struct CopyCloneImpl<'a, S: BuildHasher> {
+    components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>,
 }
 
-impl<'a> CopyCloneImpl<'a> {
-    pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration>) -> Self {
+impl<'a, S: BuildHasher> CopyCloneImpl<'a, S> {
+    pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>) -> Self {
         Self { components }
     }
 }
 
-impl<'a> legion::world::CloneImpl for CopyCloneImpl<'a> {
+impl<'a, S: BuildHasher> legion::world::CloneImpl for CopyCloneImpl<'a, S> {
     fn map_component_type(
         &self,
         component_type: ComponentTypeId,
     ) -> (ComponentTypeId, ComponentMeta) {
         let comp_reg = &self.components[&component_type];
-        (
-            ComponentTypeId(
-                comp_reg.ty(),
-                #[cfg(feature = "ffi")]
-                0,
-            ),
-            comp_reg.meta().clone(),
-        )
+        (comp_reg.component_type_id(), *comp_reg.meta())
     }
 
+    //TODO: Would be better if CloneImpl defined clone_components as unsafe
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn clone_components(
         &self,
-        src_world: &World,
-        src_component_storage: &ComponentStorage,
-        src_component_storage_indexes: Range<ComponentIndex>,
+        _src_world: &World,
+        _src_component_storage: &ComponentStorage,
+        _src_component_storage_indexes: Range<ComponentIndex>,
         src_type: ComponentTypeId,
-        src_entities: &[Entity],
-        dst_entities: &[Entity],
+        _src_entities: &[Entity],
+        _dst_entities: &[Entity],
         src_data: *const u8,
         dst_data: *mut u8,
         num_components: usize,
@@ -58,6 +54,7 @@ pub trait SpawnFrom<FromT: Sized>
 where
     Self: Sized,
 {
+    #[allow(clippy::too_many_arguments)]
     fn spawn_from(
         src_world: &World,
         src_component_storage: &ComponentStorage,
@@ -75,6 +72,7 @@ pub trait SpawnInto<IntoT: Sized>
 where
     Self: Sized,
 {
+    #[allow(clippy::too_many_arguments)]
     fn spawn_into(
         src_world: &World,
         src_component_storage: &ComponentStorage,
@@ -116,16 +114,15 @@ where
 }
 
 /// A registry of handlers for use with SpawnCloneImpl
+#[derive(Default)]
 pub struct SpawnCloneImplHandlerSet {
-    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>
+    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>,
 }
 
 impl SpawnCloneImplHandlerSet {
     /// Creates a new registry of handlers
     pub fn new() -> Self {
-        Self {
-            handlers: Default::default()
-        }
+        Self::default()
     }
 
     /// Adds a mapping from one component type to another. Rust's standard library into() will be
@@ -148,11 +145,6 @@ impl SpawnCloneImplHandlerSet {
              src_data: *const u8,
              dst_data: *mut u8,
              num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);
@@ -192,11 +184,6 @@ impl SpawnCloneImplHandlerSet {
              src_data: *const u8,
              dst_data: *mut u8,
              num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);
@@ -233,15 +220,17 @@ impl SpawnCloneImplHandlerSet {
         FromT: Component,
         IntoT: Component,
         F: Fn(
-            &World,                    // src_world
-            &ComponentStorage,         // src_component_storage
-            Range<ComponentIndex>,     // src_component_storage_indexes
-            &Resources,                // resources
-            &[Entity],                 // src_entities
-            &[Entity],                 // dst_entities
-            &[FromT],                  // src_data
-            &mut [MaybeUninit<IntoT>], // dst_data
-        ) + Send + Sync + 'static,
+                &World,                    // src_world
+                &ComponentStorage,         // src_component_storage
+                Range<ComponentIndex>,     // src_component_storage_indexes
+                &Resources,                // resources
+                &[Entity],                 // src_entities
+                &[Entity],                 // dst_entities
+                &[FromT],                  // src_data
+                &mut [MaybeUninit<IntoT>], // dst_data
+            ) + Send
+            + Sync
+            + 'static,
     {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
@@ -259,11 +248,6 @@ impl SpawnCloneImplHandlerSet {
                   src_data: *const u8,
                   dst_data: *mut u8,
                   num_components: usize| {
-                log::trace!(
-                    "Clone type {} -> {}",
-                    std::any::type_name::<FromT>(),
-                    std::any::type_name::<IntoT>()
-                );
                 unsafe {
                     let from_slice =
                         std::slice::from_raw_parts(src_data as *const FromT, num_components);
@@ -288,7 +272,6 @@ impl SpawnCloneImplHandlerSet {
         self.handlers.insert(from_type_id, handler);
     }
 }
-
 
 /// A CloneMergeImpl that
 ///
@@ -329,17 +312,12 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
             (handler.dst_type_id(), handler.dst_type_meta())
         } else {
             let comp_reg = &self.components[&component_type];
-            (
-                ComponentTypeId(
-                    comp_reg.ty(),
-                    #[cfg(feature = "ffi")]
-                    0,
-                ),
-                comp_reg.meta().clone(),
-            )
+            (comp_reg.component_type_id(), *comp_reg.meta())
         }
     }
 
+    //TODO: Would be better if CloneImpl defined clone_components as unsafe
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn clone_components(
         &self,
         src_world: &World,
@@ -378,9 +356,11 @@ impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
 
 /// Used internally to dynamic dispatch into a Box<CloneMergeMappingImpl<T>>
 /// These are created as mappings are added to CloneMergeImpl
-trait SpawnCloneImplMapping : Send + Sync {
+trait SpawnCloneImplMapping: Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
     fn dst_type_meta(&self) -> ComponentMeta;
+
+    #[allow(clippy::too_many_arguments)]
     fn clone_components(
         &self,
         src_world: &World,
@@ -444,16 +424,17 @@ where
 impl<F> SpawnCloneImplMapping for SpawnCloneImplMappingImpl<F>
 where
     F: Fn(
-        &World,                // src_world
-        &ComponentStorage,     // src_component_storage
-        Range<ComponentIndex>, // src_component_storage_indexes
-        &Resources,            // resources
-        &[Entity],             // src_entities
-        &[Entity],             // dst_entities
-        *const u8,             // src_data
-        *mut u8,               // dst_data
-        usize,                 // num_components
-    ) + Send + Sync,
+            &World,                // src_world
+            &ComponentStorage,     // src_component_storage
+            Range<ComponentIndex>, // src_component_storage_indexes
+            &Resources,            // resources
+            &[Entity],             // src_entities
+            &[Entity],             // dst_entities
+            *const u8,             // src_data
+            *mut u8,               // dst_data
+            usize,                 // num_components
+        ) + Send
+        + Sync,
 {
     fn dst_type_id(&self) -> ComponentTypeId {
         self.dst_type_id

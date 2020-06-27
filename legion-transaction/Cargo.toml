@@ -11,9 +11,9 @@ prefab-format = { path = "../prefab-format" }
 legion-prefab = { path = "../legion-prefab" }
 serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
-legion = { git = "https://github.com/kabergstrom/legion", default-features = false, features = ["serialize"], branch="atelier-legion-demo" }
+legion = { version = "0.2.4", default-features = false, features = ["serialize"] }
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
 log="0.4"
 # We need this PR (https://github.com/servo/bincode/pull/288) but it's not published yet
-#bincode = "1.2"
-bincode = { git = "https://github.com/servo/bincode.git", rev="e30e91e3a" }
+bincode = "1.3.1"
+

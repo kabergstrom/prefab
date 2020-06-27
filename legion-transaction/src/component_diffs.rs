@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use legion::prelude::*;
 use legion_prefab::DiffSingleResult;
 use legion_prefab::ComponentRegistration;
-use crate::CopyCloneImpl;
+use legion_prefab::CopyCloneImpl;
+use std::hash::BuildHasher;
 
 #[derive(Clone, Debug)]
 pub enum EntityDiffOp {
@@ -131,89 +132,26 @@ impl WorldDiff {
     }
 }
 
-pub struct DiffSingleSerializerAcceptor<'b, 'c, 'd, 'e> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub src_world: &'c World,
-    pub src_entity: Option<Entity>,
-    pub dst_world: &'d World,
-    pub dst_entity: Option<Entity>,
-    pub result: &'e mut legion_prefab::DiffSingleResult,
+#[derive(Debug)]
+pub enum ApplyDiffToPrefabError {
+    PrefabHasOverrides,
 }
 
-impl<'b, 'c, 'd, 'e> bincode::SerializerAcceptor for DiffSingleSerializerAcceptor<'b, 'c, 'd, 'e> {
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Serializer>(
-        mut self,
-        ser: T,
-    ) -> Self::Output
-    where
-        T::Ok: 'static,
-    {
-        let mut ser_erased = erased_serde::Serializer::erase(ser);
-
-        *self.result = self.component_registration.diff_single(
-            &mut ser_erased,
-            self.src_world,
-            self.src_entity,
-            self.dst_world,
-            self.dst_entity,
-        )
-    }
-}
-
-// Used when we process a ComponentDiffOp::Change
-pub struct ApplyDiffDeserializerAcceptor<'b, 'c> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub world: &'c mut World,
-    pub entity: Entity,
-}
-
-impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a> for ApplyDiffDeserializerAcceptor<'b, 'c> {
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Deserializer<'a>>(
-        mut self,
-        de: T,
-    ) -> Self::Output {
-        let mut de_erased = erased_serde::Deserializer::erase(de);
-        self.component_registration
-            .apply_diff(&mut de_erased, self.world, self.entity);
-    }
-}
-
-// Used when we process a ComponentDiffOp::Add
-pub struct DeserializeSingleDeserializerAcceptor<'b, 'c> {
-    pub component_registration: &'b legion_prefab::ComponentRegistration,
-    pub world: &'c mut World,
-    pub entity: Entity,
-}
-
-impl<'a, 'b, 'c> bincode::DeserializerAcceptor<'a>
-    for DeserializeSingleDeserializerAcceptor<'b, 'c>
-{
-    type Output = ();
-
-    //TODO: Error handling needs to be passed back out
-    fn accept<T: serde::Deserializer<'a>>(
-        mut self,
-        de: T,
-    ) -> Self::Output {
-        let mut de_erased = erased_serde::Deserializer::erase(de);
-        self.component_registration
-            .deserialize_single(&mut de_erased, self.world, self.entity);
-    }
-}
-
-pub fn apply_diff_to_prefab(
+/// Applies a world diff to a prefab
+///
+/// This is currently only supported for prefabs that have no overrides. If there is an override,
+/// None will be returned
+pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     prefab: &Prefab,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
-) -> Prefab {
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
+    clone_impl: &CopyCloneImpl<S>,
+) -> Result<Prefab, ApplyDiffToPrefabError> {
+    if !prefab.prefab_meta.prefab_refs.is_empty() {
+        return Err(ApplyDiffToPrefabError::PrefabHasOverrides);
+    }
+
     let (new_world, uuid_to_new_entities) = apply_diff(
         &prefab.world,
         &prefab.prefab_meta.entities,
@@ -229,18 +167,19 @@ pub fn apply_diff_to_prefab(
         entities: uuid_to_new_entities,
     };
 
-    legion_prefab::Prefab {
+    Ok(legion_prefab::Prefab {
         world: new_world,
         prefab_meta,
-    }
+    })
 }
 
-pub fn apply_diff_to_cooked_prefab(
+/// Applies a world diff to a cooked prefab
+pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
     cooked_prefab: &CookedPrefab,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
+    clone_impl: &CopyCloneImpl<S>,
 ) -> CookedPrefab {
     let (new_world, uuid_to_new_entities) = apply_diff(
         &cooked_prefab.world,
@@ -257,13 +196,13 @@ pub fn apply_diff_to_cooked_prefab(
     }
 }
 
-pub fn apply_diff(
+pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     world: &World,
-    uuid_to_entity: &HashMap<EntityUuid, Entity>,
+    uuid_to_entity: &HashMap<EntityUuid, Entity, T>,
     universe: &Universe,
     diff: &WorldDiff,
-    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-    clone_impl: &CopyCloneImpl,
+    registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, U>,
+    clone_impl: &CopyCloneImpl<S>,
 ) -> (World, HashMap<EntityUuid, Entity>) {
     // Create an empty world to populate
     let mut new_world = universe.create_world();
@@ -296,6 +235,8 @@ pub fn apply_diff(
                 {
                     new_world.delete(*new_prefab_entity);
                     uuid_to_new_entities.remove(entity_diff.entity_uuid());
+                } else {
+                    //TODO: Produce a remove override
                 }
             }
         }
@@ -308,28 +249,39 @@ pub fn apply_diff(
             {
                 match component_diff.op() {
                     ComponentDiffOp::Change(data) => {
-                        let acceptor = ApplyDiffDeserializerAcceptor {
-                            component_registration: &component_registration,
-                            world: &mut new_world,
-                            entity: *new_prefab_entity,
-                        };
+                        //TODO: Detect if we need to make the change in the world or as an override
+                        let mut deserializer =
+                            bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(
+                                data.as_slice(),
+                                bincode::config::DefaultOptions::new(),
+                            );
+                        let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        let reader = bincode::SliceReader::new(data);
-                        bincode::with_deserializer(reader, acceptor);
+                        component_registration.apply_diff(
+                            &mut de_erased,
+                            &mut new_world,
+                            *new_prefab_entity,
+                        );
                     }
                     ComponentDiffOp::Add(data) => {
-                        let acceptor = DeserializeSingleDeserializerAcceptor {
-                            component_registration: &component_registration,
-                            world: &mut new_world,
-                            entity: *new_prefab_entity,
-                        };
+                        //TODO: Detect if we need to make the change in the world or as an override
+                        let mut deserializer =
+                            bincode::Deserializer::<bincode::de::read::SliceReader, _>::from_slice(
+                                data,
+                                bincode::config::DefaultOptions::new(),
+                            );
+                        let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        let reader = bincode::SliceReader::new(data);
-                        bincode::with_deserializer(reader, acceptor);
+                        component_registration
+                            .deserialize_single(&mut de_erased, &mut new_world, *new_prefab_entity)
+                            .unwrap();
                     }
                     ComponentDiffOp::Remove => {
+                        //TODO: Detect if we need to make the change in the world or as an override
+                        //TODO: propagate error
                         component_registration
-                            .remove_from_entity(&mut new_world, *new_prefab_entity);
+                            .remove_from_entity(&mut new_world, *new_prefab_entity)
+                            .unwrap();
                     }
                 }
             }
