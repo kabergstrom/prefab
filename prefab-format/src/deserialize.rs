@@ -4,6 +4,11 @@ use serde::{
     Deserialize, Deserializer,
 };
 pub trait Storage {
+    /// Called when the deserializer encouters the top-level prefab object.
+    fn begin_prefab(
+        &self,
+        prefab: &PrefabUuid,
+    );
     /// Called when the deserializer encounters an entity object.
     /// Ideally used to start buffering component data for an entity.
     fn begin_entity_object(
@@ -648,7 +653,9 @@ impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
                     if prefab_id.is_some() {
                         return Err(de::Error::duplicate_field("id"));
                     }
-                    prefab_id = Some(*map.next_value::<uuid::Uuid>()?.as_bytes());
+                    let id = *map.next_value::<uuid::Uuid>()?.as_bytes();
+                    self.storage.begin_prefab(&id);
+                    prefab_id = Some(id);
                 }
                 PrefabField::Objects => {
                     prefab = Some(map.next_value_seed(SeqDeserializer(
@@ -664,6 +671,7 @@ impl<'a: 'de, 'de, S: Storage> Visitor<'de> for PrefabDeserializer<'a, S> {
                 }
             }
         }
+
         prefab.ok_or_else(|| de::Error::missing_field("objects"))
     }
 }

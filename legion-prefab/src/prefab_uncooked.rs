@@ -124,6 +124,12 @@ impl<'a> PrefabFormatDeserializer<'a> {
 // This implementation takes care of reading a prefab source file. As we walk through the source
 // file the functions here are called and we build out the data
 impl StorageDeserializer for PrefabFormatDeserializer<'_> {
+    fn begin_prefab(
+        &self,
+        prefab: &PrefabUuid,
+    ) {
+        self.get_or_insert_prefab_mut(prefab);
+    }
     fn begin_entity_object(
         &self,
         prefab: &PrefabUuid,

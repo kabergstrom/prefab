@@ -4,6 +4,7 @@ use prefab_format::ComponentTypeUuid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use type_uuid::TypeUuid;
+use serde_diff::SerdeDiff;
 
 // Components require TypeUuid + Serialize + Deserialize + SerdeDiff + Send + Sync
 #[derive(TypeUuid, Serialize, Deserialize, SerdeDiff, Clone, Default)]
@@ -31,10 +32,10 @@ fn main() {
     };
 
     let prefab_serde_context = legion_prefab::PrefabSerdeContext {
-        registered_components,
+        registered_components: &registered_components,
     };
 
-    let prefab_deser = legion_prefab::PrefabFormatDeserializer::new(&prefab_serde_context);
+    let prefab_deser = legion_prefab::PrefabFormatDeserializer::new(prefab_serde_context);
     prefab_format::deserialize(&mut de, &prefab_deser).unwrap();
 
     let prefab = prefab_deser.prefab();
@@ -53,7 +54,7 @@ fn main() {
     );
 
     let mut ron_ser = ron::ser::Serializer::new(Some(ron::ser::PrettyConfig::default()), true);
-    let prefab_ser = legion_prefab::PrefabFormatSerializer::new(&prefab_serde_context, &prefab);
+    let prefab_ser = legion_prefab::PrefabFormatSerializer::new(prefab_serde_context, &prefab);
     prefab_format::serialize(&mut ron_ser, &prefab_ser, prefab.prefab_id())
         .expect("failed to round-trip prefab");
     println!("Round-tripped prefab: {}", ron_ser.into_output_string());
