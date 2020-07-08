@@ -2,7 +2,7 @@ use prefab_format::{ComponentTypeUuid, EntityUuid};
 use legion_prefab::CookedPrefab;
 use legion_prefab::Prefab;
 use std::collections::HashMap;
-use legion::prelude::*;
+use legion::*;
 use legion_prefab::DiffSingleResult;
 use legion_prefab::ComponentRegistration;
 use legion_prefab::CopyCloneImpl;
@@ -209,12 +209,13 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
 
     // Copy everything from the opened prefab into the new world as a baseline
     let mut result_mappings: HashMap<Entity, Entity> = Default::default();
-    new_world.clone_from(
-        world,
-        clone_impl,
-        &mut legion::world::HashMapCloneImplResult(&mut result_mappings),
-        &legion::world::NoneEntityReplacePolicy,
-    );
+    unimplemented!();
+    // new_world.clone_from(
+    //     world,
+    //     clone_impl,
+    //     &mut legion::world::HashMapCloneImplResult(&mut result_mappings),
+    //     &legion::world::NoneEntityReplacePolicy,
+    // );
 
     // We want to preserve entity UUIDs so we need to insert mappings here as we copy data
     // into the new world
@@ -227,13 +228,13 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     for entity_diff in &diff.entity_diffs {
         match entity_diff.op() {
             EntityDiffOp::Add => {
-                let new_entity = new_world.insert((), vec![()]);
+                let new_entity = new_world.extend(vec![()]);
                 uuid_to_new_entities.insert(*entity_diff.entity_uuid(), new_entity[0]);
             }
             EntityDiffOp::Remove => {
                 if let Some(new_prefab_entity) = uuid_to_new_entities.get(entity_diff.entity_uuid())
                 {
-                    new_world.delete(*new_prefab_entity);
+                    new_world.remove(*new_prefab_entity);
                     uuid_to_new_entities.remove(entity_diff.entity_uuid());
                 } else {
                     //TODO: Produce a remove override
@@ -273,15 +274,13 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
                         component_registration
-                            .deserialize_single(&mut de_erased, &mut new_world, *new_prefab_entity)
-                            .unwrap();
+                            .deserialize_single(&mut de_erased, &mut new_world, *new_prefab_entity);;
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override
                         //TODO: propagate error
                         component_registration
-                            .remove_from_entity(&mut new_world, *new_prefab_entity)
-                            .unwrap();
+                            .remove_from_entity(&mut new_world, *new_prefab_entity);
                     }
                 }
             }

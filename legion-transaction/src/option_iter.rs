@@ -2,7 +2,7 @@ use core::ops::Range;
 use legion::storage::ComponentStorage;
 use legion::storage::ComponentTypeId;
 use legion::storage::Component;
-use legion::index::ComponentIndex;
+use legion::storage::ComponentIndex;
 
 /// Given an optional iterator, this will return Some(iter.next()) or Some(None) up to n times.
 /// For a simpler interface for a slice/range use create_option_iter_from_slice, which will return
@@ -54,27 +54,29 @@ fn option_iter_from_slice<X>(
     let mapped = opt.map(|x| (x[range.clone()]).iter());
     OptionIter::new(mapped, range.end - range.start)
 }
-
-fn get_components_in_storage<T: Component>(component_storage: &ComponentStorage) -> Option<&[T]> {
+/*
+fn get_components_in_storage<'a, T: Component>(component_storage: &ComponentStorage<'a, T>) -> Option<&'a [T]> {
     unsafe {
         component_storage
             .components(ComponentTypeId::of::<T>())
-            .map(|x| *x.data_slice::<T>())
+            .map(|x| *x.get::<T>())
     }
 }
-
-/// Given component storage and a range, this function will return an iterator of all components of
-/// type T within the range.
-///
-/// When next is called on the iterator, one of three results can occur:
-///  - None: The iterator has reached the end of the range
-///  - Some(None): The entity does not have a component of type T attached to it
-///  - Some(Some(T)): The entity has a component of type T attached to it
-pub fn iter_components_in_storage<T: Component>(
-    component_storage: &ComponentStorage,
-    component_storage_indexes: Range<ComponentIndex>,
-) -> OptionIter<core::slice::Iter<T>, &T> {
-    let all_position_components = get_components_in_storage::<T>(component_storage);
-    let range = component_storage_indexes.start.0..component_storage_indexes.end.0;
-    option_iter_from_slice(all_position_components, range)
-}
+*/
+// Given component storage and a range, this function will return an iterator of all components of
+// type T within the range.
+//
+// When next is called on the iterator, one of three results can occur:
+//  - None: The iterator has reached the end of the range
+//  - Some(None): The entity does not have a component of type T attached to it
+//  - Some(Some(T)): The entity has a component of type T attached to it
+// pub fn iter_components_in_storage<'a, T: Component>(
+//     component_storage: &'a ComponentStorage<'a, T>,
+//     component_storage_indexes: Range<ComponentIndex>,
+// ) -> OptionIter<core::slice::Iter<'a, T>, &'a T> {
+//     //let all_position_components = get_components_in_storage::<T>(component_storage);
+//     let slice = component_storage.get().unwrap();
+//     //slice.ran
+//     let range = component_storage_indexes.start.0..component_storage_indexes.end.0;
+//     option_iter_from_slice(slice, range)
+// }

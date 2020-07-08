@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 pub struct CookedPrefab {
     pub world: legion::world::World,
-    pub entities: HashMap<EntityUuid, legion::entity::Entity>,
+    pub entities: HashMap<EntityUuid, legion::Entity>,
 }
 
 impl Serialize for CookedPrefab {
@@ -18,33 +18,23 @@ impl Serialize for CookedPrefab {
     {
         use serde::ser::SerializeStruct;
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    legion::storage::TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
-        let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations()
-                .map(|reg| (reg.component_type_id(), reg.clone())),
-        );
+        // let comp_types = HashMap::from_iter(
+        //     crate::registration::iter_component_registrations()
+        //         .map(|reg| (reg.component_type_id(), reg.clone())),
+        // );
+        //
+        // let mut entity_map = HashMap::with_capacity(self.entities.len());
+        // for (k, v) in &self.entities {
+        //     entity_map.insert(*v, *k);
+        // }
 
-        let mut entity_map = HashMap::with_capacity(self.entities.len());
-        for (k, v) in &self.entities {
-            entity_map.insert(*v, *k);
-        }
-
-        let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
-        let serializable_world =
-            legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
-        let mut struct_ser = serializer.serialize_struct("CookedPrefab", 2)?;
-        struct_ser.serialize_field("world", &serializable_world)?;
-        struct_ser.end()
+        unimplemented!();
+        // let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
+        // let serializable_world =
+        //     legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
+        // let mut struct_ser = serializer.serialize_struct("CookedPrefab", 2)?;
+        // struct_ser.serialize_field("world", &serializable_world)?;
+        // struct_ser.end()
     }
 }
 
@@ -109,7 +99,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
 }
 struct WorldDeser(
     legion::world::World,
-    HashMap<uuid::Bytes, legion::entity::Entity>,
+    HashMap<uuid::Bytes, legion::Entity>,
 );
 impl<'de> Deserialize<'de> for WorldDeser {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -117,28 +107,18 @@ impl<'de> Deserialize<'de> for WorldDeser {
         D: Deserializer<'de>,
     {
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    legion::storage::TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
-        let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations()
-                .map(|reg| (reg.component_type_id(), reg.clone())),
-        );
-        let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
+        // let comp_types = HashMap::from_iter(
+        //     crate::registration::iter_component_registrations()
+        //         .map(|reg| (reg.component_type_id(), reg.clone())),
+        // );
 
         // TODO support sharing universe
-        let mut world = legion::world::World::new();
-        let deserializable_world =
-            legion::serialize::de::deserializable(&mut world, &deserialize_impl);
-        serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
-        Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
+        unimplemented!();
+        //let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
+        // let mut world = legion::world::World::new();
+        // let deserializable_world =
+        //     legion::serialize::de::deserializable(&mut world, &deserialize_impl);
+        // serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
+        // Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
     }
 }

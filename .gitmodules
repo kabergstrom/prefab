@@ -1,0 +1,3 @@
+[submodule "legion.git"]
+	path = legion
+	url = https://github.com/aclysma/legion.git

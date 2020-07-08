@@ -1,4 +1,4 @@
-use legion::prelude::*;
+use legion::*;
 use legion_prefab::ComponentRegistration;
 use prefab_format::ComponentTypeUuid;
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ fn main() {
 
     let prefab = prefab_deser.prefab();
     println!("iterate positions");
-    let query = <legion::prelude::Read<Position2D>>::query();
+    let mut query = <legion::Read<Position2D>>::query();
     for pos in query.iter(&prefab.world) {
         println!("position: {:?}", pos.position);
     }

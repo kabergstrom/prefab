@@ -11,7 +11,7 @@ prefab-format = { path = "../prefab-format" }
 legion-prefab = { path = "../legion-prefab" }
 serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
-legion = { version = "0.2.4", default-features = false, features = ["serialize"] }
+legion = { version = "0.3.0", default-features = false, features = ["serialize"] }
 uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
 log="0.4"
 # We need this PR (https://github.com/servo/bincode/pull/288) but it's not published yet

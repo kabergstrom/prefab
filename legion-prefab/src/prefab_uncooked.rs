@@ -1,13 +1,14 @@
 use crate::format::{ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer, StorageSerializer};
 use crate::ComponentRegistration;
-use legion::prelude::*;
-use legion::storage::{TagTypeId, ComponentTypeId};
+use legion::*;
+use legion::storage::{ComponentTypeId, ArchetypeIndex, EntityLayout, UnknownComponentStorage};
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
 };
+use legion::serialize::{WorldSerializer, WorldDeserializer};
 
 /// The data we override on a component of an entity in another prefab that we reference
 #[derive(Serialize, Deserialize)]
@@ -56,8 +57,10 @@ pub struct Prefab {
 impl Prefab {
     pub fn new(world: World) -> Self {
         let mut entities = HashMap::new();
-        for entity in world.iter_entities() {
-            entities.insert(*uuid::Uuid::new_v4().as_bytes(), entity);
+
+        let mut all = Entity::query();
+        for entity in all.iter(&world) {
+            entities.insert(*uuid::Uuid::new_v4().as_bytes(), *entity);
         }
 
         let prefab_meta = PrefabMeta {
@@ -136,7 +139,7 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
         entity: &EntityUuid,
     ) {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        let new_entity = prefab.world.insert((), vec![()])[0];
+        let new_entity = prefab.world.extend(vec![()])[0];
         prefab.prefab_meta.entities.insert(*entity, new_entity);
     }
     fn end_entity_object(
@@ -175,8 +178,7 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
             &mut erased_serde::Deserializer::erase(deserializer),
             &mut prefab.world,
             entity,
-        )
-        .unwrap();
+        );
         Ok(())
     }
     fn begin_prefab_ref(
@@ -239,17 +241,7 @@ impl Serialize for Prefab {
     {
         use serde::ser::SerializeStruct;
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
+
         let comp_types = HashMap::from_iter(
             crate::registration::iter_component_registrations()
                 .map(|reg| (reg.component_type_id(), reg.clone())),
@@ -261,15 +253,68 @@ impl Serialize for Prefab {
             entity_map.insert(*v, *k);
         }
 
-        let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
-        let serializable_world =
-            legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
-        let mut struct_ser = serializer.serialize_struct("Prefab", 2)?;
-        struct_ser.serialize_field("prefab_meta", &self.prefab_meta)?;
-        struct_ser.serialize_field("world", &serializable_world)?;
-        struct_ser.end()
+        //let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
+        //let serializable_world = legion::serialize::WorldSerializer::
+            //legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
+
+        let custom_serializer = CustomSerializer {
+            prefab: &self,
+            comp_types: &comp_types,
+            entity_map: &entity_map
+        };
+
+        unimplemented!();
+        // self.world.as_serializable(legion::query::any(), (&self, &comp_types, &entity_map));
+        //
+        // let mut struct_ser = serializer.serialize_struct("Prefab", 2)?;
+        // struct_ser.serialize_field("prefab_meta", &self.prefab_meta)?;
+        // struct_ser.serialize_field("world", &serializable_world)?;
+        // struct_ser.end()
     }
 }
+
+struct CustomSerializer<'a> {
+    prefab: &'a Prefab,
+    comp_types: &'a HashMap<ComponentTypeId, ComponentRegistration>,
+    entity_map: &'a HashMap<Entity, uuid::Bytes>
+}
+
+impl<'a> legion::serialize::WorldSerializer for CustomSerializer<'a> {
+    type TypeId = type_uuid::Bytes;
+
+    fn map_id(&self, type_id: ComponentTypeId) -> Option<Self::TypeId> {
+        self.comp_types.get(&type_id).and_then(|x| Some(*x.uuid()))
+    }
+
+    unsafe fn serialize_component<S: Serializer>(&self, ty: ComponentTypeId, ptr: *const u8, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+//        self.comp_types.get(&ty).unwrap().serialize_component()
+
+        if let Some(reg) = self.comp_types.get(&ty) {
+            let result = RefCell::new(None);
+            let serializer = RefCell::new(Some(serializer));
+            {
+                let mut result_ref = result.borrow_mut();
+                // The safety is guaranteed due to the guarantees of the registration,
+                // namely that the ComponentTypeId maps to a ComponentRegistration of
+                // the correct type.
+                unsafe {
+                    (reg.comp_serialize_fn)(ptr, &mut |serialize| {
+                        result_ref.replace(erased_serde::serialize(
+                            serialize,
+                            serializer.borrow_mut().take().unwrap(),
+                        ));
+                    });
+                }
+            }
+            return result.borrow_mut().take().unwrap();
+        }
+        panic!(
+            "received unserializable type {:?}",
+            ty
+        );
+    }
+}
+
 
 #[derive(Deserialize, Debug)]
 #[serde(field_identifier, rename_all = "snake_case")]
@@ -348,31 +393,64 @@ impl<'de> Deserialize<'de> for WorldDeser {
         D: Deserializer<'de>,
     {
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
-        let comp_types = HashMap::from_iter(
-            crate::registration::iter_component_registrations()
-                .map(|reg| (reg.component_type_id(), reg.clone())),
-        );
-        let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
+        // let comp_types = HashMap::from_iter(
+        //     crate::registration::iter_component_registrations()
+        //         .map(|reg| (reg.component_type_id(), reg.clone())),
+        // );
 
-        // TODO support sharing universe
-        let mut world = World::new();
-        let deserializable_world =
-            legion::serialize::de::deserializable(&mut world, &deserialize_impl);
-        serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
-        Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
+
+        unimplemented!();
+        // let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
+        //
+        // // TODO support sharing universe
+        // let mut world = World::new();
+
+
+
+        // let deserializable_world =
+        //     legion::serialize::de::deserializable(&mut world, &deserialize_impl);
+        // serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
+        // Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
     }
 }
+
+struct CustomDeserializer<'a> {
+    comp_types: &'a HashMap<ComponentTypeId, ComponentRegistration>
+}
+
+impl<'a> legion::serialize::WorldDeserializer for CustomDeserializer<'a> {
+    type TypeId = ();
+
+    fn unmap_id(&self, type_id: &Self::TypeId) -> Option<ComponentTypeId> {
+        unimplemented!()
+    }
+
+    fn register_component(&self, type_id: Self::TypeId, layout: &mut EntityLayout) {
+        unimplemented!()
+    }
+
+    fn deserialize_component_slice<'de, D: Deserializer<'de>>(&self, type_id: ComponentTypeId, storage: &mut UnknownComponentStorage, arch_index: ArchetypeIndex, deserializer: D) -> Result<(), <D as Deserializer<'de>>::Error> {
+        unimplemented!()
+    }
+
+    fn deserialize_component<'de, D: Deserializer<'de>>(&self, type_id: ComponentTypeId, deserializer: D) -> Result<Box<[u8]>, <D as Deserializer<'de>>::Error> {
+        unimplemented!()
+    }
+}
+
+
+// impl<'de, T: TypeKey> DeserializeSeed<'de> for Registry<T> {
+//     type Value = World;
+//
+//     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+//         where
+//             D: serde::Deserializer<'de>,
+//     {
+//         let wrapped = de::Wrapper(self);
+//         wrapped.deserialize(deserializer)
+//     }
+// }
+
 
 pub struct PrefabFormatSerializer<'a, 'b> {
     prefab: &'b Prefab,
@@ -406,12 +484,17 @@ impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
         entity_uuid: &EntityUuid,
     ) -> Vec<ComponentTypeUuid> {
         let entity = self.prefab.prefab_meta.entities[entity_uuid];
-        self.prefab
+        let e = self.prefab
             .world
-            .entity_component_types(entity)
-            .expect("entity not in World when serializing prefab")
+            .entry_ref(entity)
+            .expect("entity not in World when serializing prefab");
+
+
+        e.archetype()
+            .layout()
+            .component_types()
             .iter()
-            .filter_map(|(type_id, _)| self.type_id_to_uuid.get(type_id).cloned())
+            .filter_map(|type_id| self.type_id_to_uuid.get(type_id).cloned())
             .filter(|type_id| self.context.registered_components.contains_key(type_id))
             .collect()
     }

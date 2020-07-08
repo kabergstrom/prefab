@@ -1,4 +1,4 @@
-use legion::prelude::*;
+use legion::*;
 use prefab_format::{EntityUuid, ComponentTypeUuid, PrefabUuid};
 
 use std::collections::HashMap;
@@ -62,36 +62,38 @@ impl PrefabBuilder {
         clone_impl: &CopyCloneImpl<S>,
     ) -> Self {
         let mut before_world = universe.create_world();
-        let mut before_result_mappings = HashMap::new();
-        before_world.clone_from(
-            &prefab.world,
-            clone_impl,
-            &mut legion::world::HashMapCloneImplResult(&mut before_result_mappings),
-            &legion::world::NoneEntityReplacePolicy,
-        );
+        unimplemented!();
+        // let mut before_result_mappings = HashMap::new();
+        // before_world.clone_from(
+        //     &prefab.world,
+        //     clone_impl,
+        //     &mut legion::world::HashMapCloneImplResult(&mut before_result_mappings),
+        //     &legion::world::NoneEntityReplacePolicy,
+        // );
 
         let mut after_world = universe.create_world();
-        let mut after_result_mappings = HashMap::new();
-        after_world.clone_from(
-            &prefab.world,
-            clone_impl,
-            &mut legion::world::HashMapCloneImplResult(&mut after_result_mappings),
-            &legion::world::NoneEntityReplacePolicy,
-        );
+        unimplemented!();
+        // let mut after_result_mappings = HashMap::new();
+        // after_world.clone_from(
+        //     &prefab.world,
+        //     clone_impl,
+        //     &mut legion::world::HashMapCloneImplResult(&mut after_result_mappings),
+        //     &legion::world::NoneEntityReplacePolicy,
+        // );
 
-        let mut uuid_to_entities = FnvHashMap::default();
-        for (uuid, entity) in &prefab.entities {
-            let before_entity = before_result_mappings[entity];
-            let after_entity = after_result_mappings[entity];
-            uuid_to_entities.insert(*uuid, EntityInfo::new(before_entity, after_entity));
-        }
-
-        PrefabBuilder {
-            before_world,
-            after_world,
-            uuid_to_entities,
-            parent_prefab: prefab_uuid,
-        }
+        // let mut uuid_to_entities = FnvHashMap::default();
+        // for (uuid, entity) in &prefab.entities {
+        //     let before_entity = before_result_mappings[entity];
+        //     let after_entity = after_result_mappings[entity];
+        //     uuid_to_entities.insert(*uuid, EntityInfo::new(before_entity, after_entity));
+        // }
+        //
+        // PrefabBuilder {
+        //     before_world,
+        //     after_world,
+        //     uuid_to_entities,
+        //     parent_prefab: prefab_uuid,
+        // }
     }
 
     pub fn world(&self) -> &World {
@@ -120,28 +122,26 @@ impl PrefabBuilder {
 
         let mut preexisting_after_entities = HashSet::new();
         for entity_info in self.uuid_to_entities.values() {
-            if self
-                .after_world
-                .get_entity_location(entity_info.after_entity())
-                .is_none()
-            {
-                // Fail, an entity was deleted. This is not supported
+            if !self.after_world.contains(entity_info.after_entity) {
                 return Err(PrefabBuilderError::EntityDeleted);
             }
 
-            preexisting_after_entities.insert(entity_info.after_entity());
+            preexisting_after_entities.insert(entity_info.after_entity);
         }
 
         // Find the entities that have been added
-        for after_entity in self.after_world.iter_entities() {
+
+        let mut all = Entity::query();
+        for after_entity in all.iter(&self.after_world) {
             if !preexisting_after_entities.contains(&after_entity) {
-                let new_entity = new_prefab_world.clone_from_single(
-                    &self.after_world,
-                    after_entity,
-                    clone_impl,
-                    None,
-                );
-                new_prefab_entities.insert(*uuid::Uuid::new_v4().as_bytes(), new_entity);
+                unimplemented!();
+                // let new_entity = new_prefab_world.clone_from_single(
+                //     &self.after_world,
+                //     after_entity,
+                //     clone_impl,
+                //     None,
+                // );
+                // new_prefab_entities.insert(*uuid::Uuid::new_v4().as_bytes(), new_entity);
             }
         }
 

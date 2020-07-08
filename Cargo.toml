@@ -4,3 +4,6 @@ members = [
     "legion-transaction",
     "prefab-format",
 ]
+
+[patch.crates-io]
+legion = { path = "legion" }
