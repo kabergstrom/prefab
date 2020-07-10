@@ -1,5 +1,5 @@
 pub use inventory;
-use legion::storage::{EntityLayout, /*ComponentMeta,*/ ComponentStorage};
+use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex};
 use serde::{
     de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer, Serialize,
@@ -114,20 +114,25 @@ pub enum DiffSingleResult {
     Remove,
 }
 
+type CompRegisterFn = fn(&mut EntityLayout);
+
 type CompSerializeFn =
     unsafe fn(*const u8, &mut dyn FnMut(&dyn erased_serde::Serialize));
 type CompDeserializeFn = fn(
+    storage: &mut UnknownComponentStorage,
+    arch_index: ArchetypeIndex,
     deserializer: &mut dyn erased_serde::Deserializer,
-    get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
+    //get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
 ) -> Result<(), erased_serde::Error>;
-type CompRegisterFn = fn(&mut EntityLayout);
+
 type DeserializeSingleFn = fn(
     &mut dyn erased_serde::Deserializer,
-    &mut World,
-    Entity,
-);
+    //&mut World,
+    //Entity,
+) -> Result<Box<[u8]>, erased_serde::Error>;
 type SerializeSingleFn =
     fn(&World, Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
+
 type DiffSingleFn = fn(
     &mut dyn erased_serde::Serializer,
     &World,
@@ -137,8 +142,14 @@ type DiffSingleFn = fn(
 ) -> DiffSingleResult;
 type ApplyDiffFn =
     fn(&mut dyn erased_serde::Deserializer, &mut World, Entity);
+
 type CompCloneFn = fn(*const u8, *mut u8, usize);
 type AddDefaultToEntityFn = fn(
+    &mut World,
+    Entity,
+);
+type AddToEntityFn = fn(
+    &mut dyn erased_serde::Deserializer,
     &mut World,
     Entity,
 );
@@ -149,24 +160,32 @@ type RemoveFromEntityFn = fn(
 
 #[derive(Clone)]
 pub struct ComponentRegistration {
-    pub(crate) component_type_id: ComponentTypeId,
-    pub(crate) uuid: type_uuid::Bytes,
-    pub(crate) ty: TypeId,
-    //pub(crate) meta: ComponentMeta,
-    pub(crate) type_name: &'static str,
-    pub(crate) comp_serialize_fn: CompSerializeFn,
-    pub(crate) comp_deserialize_fn: CompDeserializeFn,
-    pub(crate) register_comp_fn: CompRegisterFn,
-    pub(crate) deserialize_single_fn: DeserializeSingleFn,
-    pub(crate) serialize_single_fn: SerializeSingleFn,
-    pub(crate) diff_single_fn: DiffSingleFn,
-    pub(crate) apply_diff_fn: ApplyDiffFn,
-    pub(crate) comp_clone_fn: CompCloneFn,
-    pub(crate) add_default_to_entity_fn: AddDefaultToEntityFn,
-    pub(crate) remove_from_entity_fn: RemoveFromEntityFn,
+    component_type_id: ComponentTypeId,
+    uuid: type_uuid::Bytes,
+    ty: TypeId,
+    type_name: &'static str,
+    register_comp_fn: CompRegisterFn,
+
+    // These are used by legion to serialize worlds
+    comp_serialize_fn: CompSerializeFn,
+    comp_deserialize_fn: CompDeserializeFn,
+    deserialize_single_fn: DeserializeSingleFn,
+
+    // Used by prefab logic
+    serialize_single_fn: SerializeSingleFn,
+    diff_single_fn: DiffSingleFn,
+    apply_diff_fn: ApplyDiffFn,
+    comp_clone_fn: CompCloneFn,
+    add_default_to_entity_fn: AddDefaultToEntityFn,
+    add_to_entity_fn: AddToEntityFn,
+    remove_from_entity_fn: RemoveFromEntityFn,
 }
 
 impl ComponentRegistration {
+    pub fn component_type_id(&self) -> ComponentTypeId {
+        self.component_type_id
+    }
+
     pub fn uuid(&self) -> &type_uuid::Bytes {
         &self.uuid
     }
@@ -175,25 +194,45 @@ impl ComponentRegistration {
         self.ty
     }
 
-    pub fn component_type_id(&self) -> ComponentTypeId {
-        self.component_type_id
-    }
-
-    //pub fn meta(&self) -> &ComponentMeta {
-    //     &self.meta
-    // }
-
     pub fn type_name(&self) -> &'static str {
         self.type_name
+    }
+
+    pub fn register_component(&self, layout: &mut EntityLayout) {
+        (self.register_comp_fn)(layout);
+    }
+
+    pub unsafe fn comp_serialize(
+        &self,
+        ptr: *const u8,
+        serialize_fn: &mut dyn FnMut(&dyn erased_serde::Serialize)
+    ) {
+        (self.comp_serialize_fn)(ptr, serialize_fn)
+    }
+
+    pub fn comp_deserialize(
+        &self,
+        storage: &mut UnknownComponentStorage,
+        arch_index: ArchetypeIndex,
+        deserializer: &mut dyn erased_serde::Deserializer,
+    ) -> Result<(), erased_serde::Error> {
+        (self.comp_deserialize_fn)(storage, arch_index, deserializer)
     }
 
     pub fn deserialize_single(
         &self,
         deserializer: &mut dyn erased_serde::Deserializer,
-        world: &mut legion::world::World,
+    ) -> Result<Box<[u8]>, erased_serde::Error> {
+        (self.deserialize_single_fn)(deserializer)
+    }
+
+    pub fn serialize_single(
+        &self,
+        world: &legion::world::World,
         entity: Entity,
+        serialize: &mut dyn FnMut(&dyn erased_serde::Serialize),
     ) {
-        (self.deserialize_single_fn)(deserializer, world, entity)
+        (self.serialize_single_fn)(world, entity, serialize);
     }
 
     pub fn add_default_to_entity(
@@ -202,6 +241,15 @@ impl ComponentRegistration {
         entity: Entity,
     ) {
         (self.add_default_to_entity_fn)(world, entity)
+    }
+
+    pub fn add_to_entity(
+        &self,
+        deserializer: &mut dyn erased_serde::Deserializer,
+        world: &mut legion::world::World,
+        entity: Entity,
+    ) {
+        (self.add_to_entity_fn)(deserializer, world, entity)
     }
 
     pub fn remove_from_entity(
@@ -242,15 +290,6 @@ impl ComponentRegistration {
         (self.comp_clone_fn)(src, dst, num_components);
     }
 
-    pub fn serialize(
-        &self,
-        world: &legion::world::World,
-        entity: Entity,
-        serialize: &mut dyn FnMut(&dyn erased_serde::Serialize),
-    ) {
-        (self.serialize_single_fn)(world, entity, serialize);
-    }
-
     pub fn of<
         T: TypeUuid
             + Clone
@@ -268,31 +307,41 @@ impl ComponentRegistration {
             ty: TypeId::of::<T>(),
             //meta: ComponentMeta::of::<T>(),
             type_name: std::any::type_name::<T>(),
+            register_comp_fn: |layout| {
+                layout.register_component::<T>();
+            },
             comp_serialize_fn: |ptr, serialize_fn| unsafe {
-                //let slice = comp_storage.get::<T>();
                 let component_ptr = ptr as *const T;
                 unsafe {
                     serialize_fn(&*component_ptr);
                 }
             },
-            comp_deserialize_fn: |deserializer, get_next_storage_fn| {
-                let comp_seq_deser = ComponentSeqDeserializer::<T> {
-                    get_next_storage_fn,
-                    _marker: PhantomData,
-                };
-                comp_seq_deser.deserialize(deserializer)?;
+            comp_deserialize_fn: |
+                storage,
+                arch_index,
+                deserializer,
+            | {
+                let mut components = erased_serde::deserialize::<Vec<T>>(deserializer)?;
+                unsafe {
+                    let ptr = components.as_ptr();
+                    storage.extend_memcopy_raw(arch_index, ptr as *const u8, components.len());
+                    components.set_len(0);
+                }
                 Ok(())
             },
-            register_comp_fn: |desc| {
-                desc.register_component::<T>();
-            },
             deserialize_single_fn: |d,
-                                    world,
-                                    entity| {
-                // TODO propagate error
-                let comp =
-                    erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
-                world.entry(entity).unwrap().add_component(comp);
+                                    //world,
+                                    //entity
+            | {
+                let component = erased_serde::deserialize::<T>(d)?;
+                unsafe {
+                    let vec = std::slice::from_raw_parts(
+                        &component as *const T as *const u8,
+                        std::mem::size_of::<T>(),
+                    ).to_vec();
+                    std::mem::forget(component);
+                    Ok(vec.into_boxed_slice())
+                }
             },
             serialize_single_fn: |world, entity, s_fn| {
                 let comp = world
@@ -367,6 +416,15 @@ impl ComponentRegistration {
                 }
             },
             add_default_to_entity_fn: |world, entity| world.entry(entity).unwrap().add_component(T::default()),
+            add_to_entity_fn: |d,
+                                    world,
+                                    entity
+            | {
+                // TODO propagate error
+                let comp =
+                    erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
+                world.entry(entity).unwrap().add_component(comp);
+            },
             remove_from_entity_fn: |world, entity| world.entry(entity).unwrap().remove_component::<T>(),
         }
     }

@@ -274,7 +274,7 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
                         component_registration
-                            .deserialize_single(&mut de_erased, &mut new_world, *new_prefab_entity);;
+                            .add_to_entity(&mut de_erased, &mut new_world, *new_prefab_entity);
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override
