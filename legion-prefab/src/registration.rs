@@ -305,7 +305,6 @@ impl ComponentRegistration {
             component_type_id: ComponentTypeId::of::<T>(),
             uuid: T::UUID,
             ty: TypeId::of::<T>(),
-            //meta: ComponentMeta::of::<T>(),
             type_name: std::any::type_name::<T>(),
             register_comp_fn: |layout| {
                 layout.register_component::<T>();

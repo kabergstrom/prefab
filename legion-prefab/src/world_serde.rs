@@ -25,23 +25,22 @@ impl legion::serialize::WorldSerializer for CustomSerializer {
 
     unsafe fn serialize_component<S: Serializer>(&self, ty: ComponentTypeId, ptr: *const u8, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
         if let Some(reg) = self.comp_types.get(&ty) {
-            let result = RefCell::new(None);
-            let serializer = RefCell::new(Some(serializer));
-            {
-                let mut result_ref = result.borrow_mut();
-                // The safety is guaranteed due to the guarantees of the registration,
-                // namely that the ComponentTypeId maps to a ComponentRegistration of
-                // the correct type.
-                unsafe {
-                    reg.comp_serialize(ptr, &mut |serialize| {
-                        result_ref.replace(erased_serde::serialize(
-                            serialize,
-                            serializer.borrow_mut().take().unwrap(),
-                        ));
-                    });
-                }
+            let mut result = None;
+            let mut serializer = Some(serializer);
+
+            // The safety is guaranteed due to the guarantees of the registration,
+            // namely that the ComponentTypeId maps to a ComponentRegistration of
+            // the correct type.
+            unsafe {
+                reg.comp_serialize(ptr, &mut |serialize| {
+                    result.replace(erased_serde::serialize(
+                        serialize,
+                        serializer.take().unwrap(),
+                    ));
+                });
             }
-            return result.borrow_mut().take().unwrap();
+
+            return result.take().unwrap();
         }
         panic!(
             "received unserializable type {:?}",

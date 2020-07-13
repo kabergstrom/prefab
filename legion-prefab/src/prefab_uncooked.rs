@@ -38,10 +38,6 @@ pub struct PrefabMeta {
 
     /// The other prefabs that this prefab will include, plus the data we will override them with
     pub prefab_refs: HashMap<PrefabUuid, PrefabRef>,
-
-    //#[serde(skip)]
-    // The entities that are stored in this prefab
-    //pub entities: HashMap<EntityUuid, Entity>,
 }
 
 /// The uncooked prefab format. Raw entity data is stored in the legion::World. Metadata includes
@@ -58,16 +54,8 @@ pub struct Prefab {
 
 impl Prefab {
     pub fn new(world: World) -> Self {
-        //let mut entities = HashMap::new();
-
-        // let mut all = Entity::query();
-        // for entity in all.iter(&world) {
-        //     entities.insert(*uuid::Uuid::new_v4().as_bytes(), *entity);
-        // }
-
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
-            //entities,
             prefab_refs: Default::default(),
         };
 
@@ -116,7 +104,6 @@ impl<'a> PrefabFormatDeserializer<'a> {
                 world: World::new(),
                 prefab_meta: PrefabMeta {
                     id: *prefab_uuid,
-                    //entities: HashMap::new(),
                     prefab_refs: HashMap::new(),
                 },
             });
@@ -141,10 +128,7 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
         entity: &EntityUuid,
     ) {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        //let new_entity = prefab.world.extend(vec![()])[0];
-        //let new_entity = pre
         prefab.world.push_named(entity, ());
-        //prefab.prefab_meta.entities.insert(*entity, new_entity);
     }
     fn end_entity_object(
         &self,
@@ -160,13 +144,6 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
         deserializer: D,
     ) -> Result<(), D::Error> {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        // let entity = *prefab
-        //     .prefab_meta
-        //     .entities
-        //     .get(entity)
-        //     // deserializer implementation error, begin_entity_object shall always be called before deserialize_component
-        //     .expect("could not find prefab entity");
-
         let entity = prefab.world.universe().canon().get_id(entity).expect("could not find prefab entity");
 
         let registered = self
@@ -221,10 +198,6 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
             .prefab_refs
             .get_mut(prefab_ref)
             .expect("apply_component_diff called without begin_prefab_ref");
-        // let mut buffer = Vec::new();
-        // let mut serializer = serde_json::Serializer::new(&mut buffer);
-        // serde_transcode::transcode(deserializer, &mut serializer)
-        //     .map_err(<D::Error as serde::de::Error>::custom)?;
         let overrides = prefab_ref
             .overrides
             .entry(*entity)
@@ -294,7 +267,7 @@ impl<'de> Deserialize<'de> for Prefab {
             where
                 V: serde::de::SeqAccess<'de>,
             {
-                let mut prefab_meta: PrefabMeta =
+                let prefab_meta: PrefabMeta =
                     seq.next_element()?.expect("expected prefab_meta");
                 let world = seq.next_element::<WorldDeser>()?.expect("expected world");
                 Ok(Prefab {
@@ -318,7 +291,7 @@ impl<'de> Deserialize<'de> for Prefab {
                         }
                         PrefabField::World => {
                             let world_deser = map.next_value::<WorldDeser>()?;
-                            let mut prefab_meta =
+                            let prefab_meta =
                                 prefab_meta.expect("expected prefab_meta before world");
                             return Ok(Prefab {
                                 prefab_meta,
@@ -395,8 +368,6 @@ impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
 }
 impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
     fn entities(&self) -> Vec<EntityUuid> {
-        //self.prefab.prefab_meta.entities.keys().cloned().collect()
-
         let mut names = vec![];
         let mut all = Entity::query();
         for entity in all.iter(&self.prefab.world) {
@@ -411,7 +382,6 @@ impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
         &self,
         entity_uuid: &EntityUuid,
     ) -> Vec<ComponentTypeUuid> {
-        //let entity = self.prefab.prefab_meta.entities[entity_uuid];
         let entity = self.prefab.world.universe().canon().get_id(entity_uuid).expect("could not find prefab entity");
         let e = self.prefab
             .world
@@ -434,7 +404,6 @@ impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
     ) -> Result<S::Ok, S::Error> {
         let mut result = None;
         let mut serializer = Some(serializer);
-        //let entity = self.prefab.prefab_meta.entities[entity_uuid];
         let entity = self.prefab.world.universe().canon().get_id(entity_uuid).expect("could not find prefab entity");
         self.context.registered_components[component].serialize_single(
             &self.prefab.world,

@@ -23,7 +23,6 @@ pub use prefab_builder::PrefabBuilder;
 pub use prefab_builder::PrefabBuilderError;
 
 mod world_serde;
-//pub use world_serde::{SerializeImpl, DeserializeImpl};
 
 mod cooking;
 pub use cooking::cook_prefab;

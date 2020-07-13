@@ -67,7 +67,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
             where
                 V: serde::de::SeqAccess<'de>,
             {
-                let mut entities: HashMap<EntityUuid, legion::Entity> =
+                let entities: HashMap<EntityUuid, legion::Entity> =
                     seq.next_element()?.expect("expected entities");
                 let world = seq.next_element::<WorldDeser>()?.expect("expected world");
                 Ok(CookedPrefab {
@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                         }
                         CookedPrefabField::World => {
                             let world_deser = map.next_value::<WorldDeser>()?;
-                            let mut entities =
+                            let entities =
                                 entities.expect("expected prefab_meta before world");
                             return Ok(CookedPrefab {
                                 world: world_deser.0,

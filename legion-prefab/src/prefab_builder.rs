@@ -118,11 +118,11 @@ impl PrefabBuilder {
         clone_impl: &CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = universe.create_world();
-        //let mut new_prefab_entities = HashMap::new();
 
         let mut preexisting_after_entities = HashSet::new();
         for entity_info in self.uuid_to_entities.values() {
             if !self.after_world.contains(entity_info.after_entity) {
+                // We do not support deleting entities in child prefabs
                 return Err(PrefabBuilderError::EntityDeleted);
             }
 
@@ -130,7 +130,6 @@ impl PrefabBuilder {
         }
 
         // Find the entities that have been added
-
         let mut all = Entity::query();
         for after_entity in all.iter(&self.after_world) {
             if !preexisting_after_entities.contains(&after_entity) {
@@ -141,7 +140,6 @@ impl PrefabBuilder {
                 //     clone_impl,
                 //     None,
                 // );
-                // new_prefab_entities.insert(*uuid::Uuid::new_v4().as_bytes(), new_entity);
             }
         }
 
@@ -199,7 +197,6 @@ impl PrefabBuilder {
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
             prefab_refs,
-            //entities: new_prefab_entities,
         };
 
         Ok(Prefab {
