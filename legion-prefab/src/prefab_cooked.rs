@@ -2,7 +2,7 @@ use crate::format::EntityUuid;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
 use std::collections::HashMap;
-use crate::world_serde::{CustomSerializer, CustomDeserializer};
+use crate::world_serde::{CustomSerializer, CustomDeserializer, CustomDeserializerSeed};
 use legion::World;
 
 pub struct CookedPrefab {
@@ -131,8 +131,13 @@ impl<'de> Deserialize<'de> for WorldDeser {
             comp_types,
             comp_types_uuid
         };
+        let universe = legion::Universe::new();
+        let custom_deserializer_seed = CustomDeserializerSeed {
+            deserializer: &custom_deserializer,
+            universe: &universe
+        };
         use serde::de::DeserializeSeed;
-        let world: World = custom_deserializer.deserialize(deserializer).unwrap();
+        let world: World = custom_deserializer_seed.deserialize(deserializer).unwrap();
         // TODO support sharing universe
         Ok(WorldDeser(world))
     }

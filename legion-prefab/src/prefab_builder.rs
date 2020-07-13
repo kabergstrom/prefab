@@ -118,7 +118,7 @@ impl PrefabBuilder {
         clone_impl: &CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = universe.create_world();
-        let mut new_prefab_entities = HashMap::new();
+        //let mut new_prefab_entities = HashMap::new();
 
         let mut preexisting_after_entities = HashSet::new();
         for entity_info in self.uuid_to_entities.values() {
@@ -199,7 +199,7 @@ impl PrefabBuilder {
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
             prefab_refs,
-            entities: new_prefab_entities,
+            //entities: new_prefab_entities,
         };
 
         Ok(Prefab {

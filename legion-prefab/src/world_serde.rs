@@ -67,7 +67,7 @@ impl legion::serialize::WorldDeserializer for CustomDeserializer {
         self.comp_types_uuid.get(&type_id).unwrap().register_component(layout);
     }
 
-    fn deserialize_component_slice<'de, D: Deserializer<'de>>(
+    fn deserialize_insert_component<'de, D: Deserializer<'de>>(
         &self,
         type_id: ComponentTypeId,
         storage: &mut UnknownComponentStorage,
@@ -92,15 +92,19 @@ impl legion::serialize::WorldDeserializer for CustomDeserializer {
     }
 }
 
+pub struct CustomDeserializerSeed<'a> {
+    pub deserializer: &'a CustomDeserializer,
+    pub universe: &'a Universe,
+}
 
-impl<'de> DeserializeSeed<'de> for CustomDeserializer {
+impl<'de, 'a> DeserializeSeed<'de> for CustomDeserializerSeed<'a> {
     type Value = World;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
         where
             D: serde::Deserializer<'de>,
     {
-        let wrapped = legion::serialize::WorldSeed(self);
+        let wrapped = legion::serialize::UniverseDeserializerWrapper(self.deserializer, self.universe);
         wrapped.deserialize(deserializer)
     }
 }
