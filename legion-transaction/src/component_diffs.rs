@@ -146,15 +146,14 @@ pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     universe: &Universe,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
-    clone_impl: &CopyCloneImpl<S>,
+    clone_impl: CopyCloneImpl<S>,
 ) -> Result<Prefab, ApplyDiffToPrefabError> {
     if !prefab.prefab_meta.prefab_refs.is_empty() {
         return Err(ApplyDiffToPrefabError::PrefabHasOverrides);
     }
 
-    let (new_world, uuid_to_new_entities) = apply_diff(
+    let new_world = apply_diff(
         &prefab.world,
-        &prefab.prefab_meta.entities,
         universe,
         diff,
         registered_components,
@@ -164,7 +163,6 @@ pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     let prefab_meta = legion_prefab::PrefabMeta {
         id: prefab.prefab_meta.id,
         prefab_refs: Default::default(),
-        entities: uuid_to_new_entities,
     };
 
     Ok(legion_prefab::Prefab {
@@ -179,11 +177,10 @@ pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
     universe: &Universe,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
-    clone_impl: &CopyCloneImpl<S>,
+    clone_impl: CopyCloneImpl<S>,
 ) -> CookedPrefab {
-    let (new_world, uuid_to_new_entities) = apply_diff(
+    let new_world = apply_diff(
         &cooked_prefab.world,
-        &cooked_prefab.entities,
         universe,
         diff,
         registered_components,
@@ -192,50 +189,35 @@ pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
 
     CookedPrefab {
         world: new_world,
-        entities: uuid_to_new_entities,
     }
 }
 
-pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
+pub fn apply_diff<S: BuildHasher, U: BuildHasher>(
     world: &World,
-    uuid_to_entity: &HashMap<EntityUuid, Entity, T>,
     universe: &Universe,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, U>,
-    clone_impl: &CopyCloneImpl<S>,
-) -> (World, HashMap<EntityUuid, Entity>) {
+    mut clone_impl: CopyCloneImpl<S>,
+) -> World {
     // Create an empty world to populate
     let mut new_world = universe.create_world();
 
     // Copy everything from the opened prefab into the new world as a baseline
-    let mut result_mappings: HashMap<Entity, Entity> = Default::default();
-    unimplemented!();
-    // new_world.clone_from(
-    //     world,
-    //     clone_impl,
-    //     &mut legion::world::HashMapCloneImplResult(&mut result_mappings),
-    //     &legion::world::NoneEntityReplacePolicy,
-    // );
-
-    // We want to preserve entity UUIDs so we need to insert mappings here as we copy data
-    // into the new world
-    let mut uuid_to_new_entities = HashMap::default();
-    for (uuid, prefab_entity) in uuid_to_entity {
-        let new_world_entity = result_mappings.get(prefab_entity).unwrap();
-        uuid_to_new_entities.insert(*uuid, *new_world_entity);
-    }
+    new_world.clone_from(
+        world,
+        &legion::query::any(),
+        &mut clone_impl,
+    );
 
     for entity_diff in &diff.entity_diffs {
         match entity_diff.op() {
             EntityDiffOp::Add => {
-                let new_entity = new_world.extend(vec![()]);
-                uuid_to_new_entities.insert(*entity_diff.entity_uuid(), new_entity[0]);
+                let new_entity = new_world.push_named(entity_diff.entity_uuid(), ());
             }
             EntityDiffOp::Remove => {
-                if let Some(new_prefab_entity) = uuid_to_new_entities.get(entity_diff.entity_uuid())
+                if let Some(new_prefab_entity) = universe.canon().get_id(entity_diff.entity_uuid())
                 {
-                    new_world.remove(*new_prefab_entity);
-                    uuid_to_new_entities.remove(entity_diff.entity_uuid());
+                    new_world.remove(new_prefab_entity);
                 } else {
                     //TODO: Produce a remove override
                 }
@@ -244,7 +226,7 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     }
 
     for component_diff in &diff.component_diffs {
-        if let Some(new_prefab_entity) = uuid_to_new_entities.get(component_diff.entity_uuid()) {
+        if let Some(new_prefab_entity) = universe.canon().get_id(component_diff.entity_uuid()) {
             if let Some(component_registration) =
                 registered_components.get(component_diff.component_type())
             {
@@ -261,7 +243,7 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
                         component_registration.apply_diff(
                             &mut de_erased,
                             &mut new_world,
-                            *new_prefab_entity,
+                            new_prefab_entity,
                         );
                     }
                     ComponentDiffOp::Add(data) => {
@@ -274,18 +256,18 @@ pub fn apply_diff<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
                         component_registration
-                            .add_to_entity(&mut de_erased, &mut new_world, *new_prefab_entity);
+                            .add_to_entity(&mut de_erased, &mut new_world, new_prefab_entity);
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override
                         //TODO: propagate error
                         component_registration
-                            .remove_from_entity(&mut new_world, *new_prefab_entity);
+                            .remove_from_entity(&mut new_world, new_prefab_entity);
                     }
                 }
             }
         }
     }
 
-    (new_world, uuid_to_new_entities)
+    new_world
 }

@@ -39,36 +39,25 @@ impl TransactionBuilder {
         self,
         universe: &Universe,
         src_world: &World,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Transaction {
         let mut before_world = universe.create_world();
         let mut after_world = universe.create_world();
 
-        let mut uuid_to_entities = HashMap::new();
-
         for entity_info in self.entities {
-            unimplemented!();
-            // let before_entity =
-            //     before_world.clone_from_single(&src_world, entity_info.entity, clone_impl, None);
-            // let after_entity =
-            //     after_world.clone_from_single(&src_world, entity_info.entity, clone_impl, None);
-            // uuid_to_entities.insert(
-            //     entity_info.entity_uuid,
-            //     TransactionEntityInfo {
-            //         before_entity: Some(before_entity),
-            //         after_entity: Some(after_entity),
-            //     },
-            // );
+            //TODO: Propagate error
+            before_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl).unwrap();
+            after_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl).unwrap();
         }
 
         Transaction {
             before_world,
             after_world,
-            uuid_to_entities,
         }
     }
 }
 
+//TODO: Remove this if possible
 pub struct TransactionEntityInfo {
     before_entity: Option<Entity>,
     after_entity: Option<Entity>,
@@ -101,9 +90,6 @@ pub struct Transaction {
     // This is the world that a downstream caller can manipulate. We will diff the data here against
     // the before_world to produce diffs
     after_world: legion::world::World,
-
-    // All known entities throughout the transaction
-    uuid_to_entities: HashMap<EntityUuid, TransactionEntityInfo>,
 }
 
 #[derive(Clone)]
@@ -145,66 +131,41 @@ impl Transaction {
         &mut self.after_world
     }
 
-    pub fn uuid_to_entity(
-        &self,
-        uuid: EntityUuid,
-    ) -> Option<Entity> {
-        self.uuid_to_entities[&uuid].after_entity()
-    }
-
     pub fn create_transaction_diffs(
         &mut self,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
     ) -> TransactionDiffs {
-        log::trace!("create diffs for {} entities", self.uuid_to_entities.len());
-
         // These will contain the instructions to add/remove entities
         let mut apply_entity_diffs = vec![];
         let mut revert_entity_diffs = vec![];
 
+        let mut all_entities = vec![];
+
         // Find the entities that have been deleted
-        let mut preexisting_after_entities = HashSet::new();
-        let mut removed_entity_uuids = HashSet::new();
-        for (entity_uuid, entity_info) in &self.uuid_to_entities {
-            if let Some(after_entity) = entity_info.after_entity {
-                if !self.after_world.contains(after_entity) {
-                    removed_entity_uuids.insert(*entity_uuid);
-                    apply_entity_diffs.push(EntityDiff::new(*entity_uuid, EntityDiffOp::Remove));
+        let mut all = Entity::query();
+        for entity in all.iter(&self.before_world) {
+            // Push all entities from the old world
+            all_entities.push(*entity);
 
-                    //TODO: This add wouldn't need to have an entity uuid with it, except that
-                    // we may generate component diffs below. It would be more efficient to let the
-                    // entity add contain all the data to create the entity anyways, but for a first
-                    // pass we'll just let the component diffs do it
-                    revert_entity_diffs.push(EntityDiff::new(*entity_uuid, EntityDiffOp::Add));
-                }
-
-                preexisting_after_entities.insert(after_entity);
+            if !self.after_world.contains(*entity) {
+                let entity_uuid = self.before_world.universe().canon().get_name(*entity).unwrap();
+                revert_entity_diffs.push(EntityDiff::new(entity_uuid, EntityDiffOp::Add));
+                apply_entity_diffs.push(EntityDiff::new(entity_uuid, EntityDiffOp::Remove));
             }
         }
 
         // Find the entities that have been added
+        for entity in all.iter(&self.after_world) {
+            if !self.before_world.contains(*entity) {
+                // Push all entities that were not in the old world. This combined with the previous
+                // loop will ensure all_entities is a union with no duplicates of all entities in
+                // the before world and after world
+                all_entities.push(*entity);
 
-        let mut all = Entity::query();
-        for after_entity in all.iter(&self.after_world) {
-            if !preexisting_after_entities.contains(&after_entity) {
-                let new_entity_uuid = uuid::Uuid::new_v4();
-
-                apply_entity_diffs.push(EntityDiff::new(
-                    *new_entity_uuid.as_bytes(),
-                    EntityDiffOp::Add,
-                ));
-
-                revert_entity_diffs.push(EntityDiff::new(
-                    *new_entity_uuid.as_bytes(),
-                    EntityDiffOp::Remove,
-                ));
-
-                // Add new entities now so that the component diffing code will pick the new entity
-                // and capture component data for it
-                self.uuid_to_entities.insert(
-                    *new_entity_uuid.as_bytes(),
-                    TransactionEntityInfo::new(None, Some(*after_entity)),
-                );
+                // Generate Add/Remove diffs
+                let entity_uuid = self.before_world.universe().canon().get_name(*entity).unwrap();
+                apply_entity_diffs.push(EntityDiff::new(entity_uuid,EntityDiffOp::Add));
+                revert_entity_diffs.push(EntityDiff::new(entity_uuid,EntityDiffOp::Remove));
             }
         }
 
@@ -223,7 +184,8 @@ impl Transaction {
 
         // Iterate the entities in the selection world and prefab world and genereate diffs for
         // each component type.
-        for (entity_uuid, entity_info) in &self.uuid_to_entities {
+        for entity in all_entities {
+            let entity_uuid = self.before_world.universe().canon().get_name(entity).unwrap();
             // Do diffs for each component type
             for (component_type, registration) in registered_components {
                 let mut apply_data = vec![];
@@ -236,9 +198,9 @@ impl Transaction {
                 let apply_result = registration.diff_single(
                     &mut apply_ser_erased,
                     &self.before_world,
-                    entity_info.before_entity,
+                    Some(entity),
                     &self.after_world,
-                    entity_info.after_entity,
+                    Some(entity),
                 );
 
                 if apply_result != DiffSingleResult::NoChange {
@@ -252,14 +214,14 @@ impl Transaction {
                     let revert_result = registration.diff_single(
                         &mut revert_ser_erased,
                         &self.after_world,
-                        entity_info.after_entity,
+                        Some(entity),
                         &self.before_world,
-                        entity_info.before_entity,
+                        Some(entity),
                     );
 
                     apply_component_diffs.push(
                         ComponentDiff::new_from_diff_single_result(
-                            *entity_uuid,
+                            entity_uuid,
                             *component_type,
                             apply_result,
                             apply_data,
@@ -269,7 +231,7 @@ impl Transaction {
 
                     revert_component_diffs.push(
                         ComponentDiff::new_from_diff_single_result(
-                            *entity_uuid,
+                            entity_uuid,
                             *component_type,
                             revert_result,
                             revert_data,
@@ -278,12 +240,6 @@ impl Transaction {
                     );
                 }
             }
-        }
-
-        // We delayed removing entities from uuid_to_entities because we still want to generate add
-        // entries for the undo step
-        for removed_entity_uuid in &removed_entity_uuids {
-            self.uuid_to_entities.remove(removed_entity_uuid);
         }
 
         let apply_diff = WorldDiff::new(apply_entity_diffs, apply_component_diffs);

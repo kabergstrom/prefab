@@ -329,6 +329,7 @@ impl<'de> Deserialize<'de> for WorldDeser {
             comp_types,
             comp_types_uuid
         };
+        // TODO support sharing universe
         let universe = legion::Universe::new();
         let custom_deserializer_seed = CustomDeserializerSeed {
             deserializer: &custom_deserializer,
@@ -337,7 +338,6 @@ impl<'de> Deserialize<'de> for WorldDeser {
 
         use serde::de::DeserializeSeed;
         let world: World = custom_deserializer_seed.deserialize(deserializer).unwrap();
-        // TODO support sharing universe
         Ok(WorldDeser(world))
     }
 }

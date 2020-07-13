@@ -1,5 +1,5 @@
 pub use inventory;
-use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex};
+use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex, Archetype, Components, ArchetypeWriter};
 use serde::{
     de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer, Serialize,
@@ -10,6 +10,7 @@ use type_uuid::TypeUuid;
 use legion::storage::ComponentTypeId;
 use legion::EntityStore;
 use legion::world::{Entity, World};
+use std::ops::Range;
 
 struct ComponentDeserializer<'de, T: Deserialize<'de>> {
     ptr: *mut T,
@@ -122,13 +123,10 @@ type CompDeserializeFn = fn(
     storage: &mut UnknownComponentStorage,
     arch_index: ArchetypeIndex,
     deserializer: &mut dyn erased_serde::Deserializer,
-    //get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
 ) -> Result<(), erased_serde::Error>;
 
 type DeserializeSingleFn = fn(
     &mut dyn erased_serde::Deserializer,
-    //&mut World,
-    //Entity,
 ) -> Result<Box<[u8]>, erased_serde::Error>;
 type SerializeSingleFn =
     fn(&World, Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
@@ -143,7 +141,12 @@ type DiffSingleFn = fn(
 type ApplyDiffFn =
     fn(&mut dyn erased_serde::Deserializer, &mut World, Entity);
 
-type CompCloneFn = fn(*const u8, *mut u8, usize);
+type CompCloneFn = fn(
+    src_entity_range: Range<usize>,
+    src_arch: &Archetype,
+    src_components: &legion::storage::Components,
+    dst: &mut ArchetypeWriter,
+);
 type AddDefaultToEntityFn = fn(
     &mut World,
     Entity,
@@ -283,11 +286,12 @@ impl ComponentRegistration {
     #[allow(clippy::missing_safety_doc)]
     pub unsafe fn clone_components(
         &self,
-        src: *const u8,
-        dst: *mut u8,
-        num_components: usize,
+        src_entity_range: Range<usize>,
+        src_arch: &Archetype,
+        src_components: &legion::storage::Components,
+        dst: &mut ArchetypeWriter,
     ) {
-        (self.comp_clone_fn)(src, dst, num_components);
+        (self.comp_clone_fn)(src_entity_range, src_arch, src_components, dst);
     }
 
     pub fn of<
@@ -299,6 +303,7 @@ impl ComponentRegistration {
             + Send
             + Sync
             + Default
+            + legion::storage::Component
             + 'static,
     >() -> Self {
         Self {
@@ -407,11 +412,24 @@ impl ComponentRegistration {
                 )
                 .expect("failed to deserialize diff");
             },
-            comp_clone_fn: |src, dst, num_components| unsafe {
-                for i in 0..num_components {
-                    let src_ptr = (src as *const T).add(i);
-                    let dst_ptr = (dst as *mut T).add(i);
-                    std::ptr::write(dst_ptr, <T as Clone>::clone(&*src_ptr));
+            comp_clone_fn: |
+                src_entity_range,
+                src_arch,
+                src_components,
+                dst,
+            | unsafe {
+                let src_components = src_components.get(ComponentTypeId::of::<T>()).unwrap();
+                let src = src_components.downcast_ref::<T::Storage>().unwrap();
+                let mut dst = dst.claim_components::<T>();
+
+                let src_slice = &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range];
+                dst.ensure_capacity(src_slice.len());
+                for component in src_slice {
+                    let cloned = <T as Clone>::clone(&component);
+                    unsafe {
+                        dst.extend_memcopy(&cloned as *const T, 1);
+                        std::mem::forget(cloned);
+                    }
                 }
             },
             add_default_to_entity_fn: |world, entity| world.entry(entity).unwrap().add_component(T::default()),

@@ -7,7 +7,6 @@ use legion::World;
 
 pub struct CookedPrefab {
     pub world: legion::world::World,
-    pub entities: HashMap<EntityUuid, legion::Entity>,
 }
 
 impl Serialize for CookedPrefab {
@@ -32,8 +31,7 @@ impl Serialize for CookedPrefab {
         };
 
         let serializable_world = self.world.as_serializable(legion::query::any(), &custom_serializer);
-        let mut struct_ser = serializer.serialize_struct("CookedPrefab", 2)?;
-        struct_ser.serialize_field("entities", &self.entities)?;
+        let mut struct_ser = serializer.serialize_struct("CookedPrefab", 1)?;
         struct_ser.serialize_field("world", &serializable_world)?;
         struct_ser.end()
     }
@@ -42,7 +40,6 @@ impl Serialize for CookedPrefab {
 #[derive(Deserialize, Debug)]
 #[serde(field_identifier, rename_all = "snake_case")]
 enum CookedPrefabField {
-    Entities,
     World,
 }
 impl<'de> Deserialize<'de> for CookedPrefab {
@@ -67,12 +64,9 @@ impl<'de> Deserialize<'de> for CookedPrefab {
             where
                 V: serde::de::SeqAccess<'de>,
             {
-                let entities: HashMap<EntityUuid, legion::Entity> =
-                    seq.next_element()?.expect("expected entities");
                 let world = seq.next_element::<WorldDeser>()?.expect("expected world");
                 Ok(CookedPrefab {
                     world: world.0,
-                    entities,
                 })
             }
 
@@ -83,19 +77,12 @@ impl<'de> Deserialize<'de> for CookedPrefab {
             where
                 V: serde::de::MapAccess<'de>,
             {
-                let mut entities: Option<HashMap<EntityUuid, legion::Entity>> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
-                        CookedPrefabField::Entities => {
-                            entities = Some(map.next_value()?);
-                        }
                         CookedPrefabField::World => {
                             let world_deser = map.next_value::<WorldDeser>()?;
-                            let entities =
-                                entities.expect("expected prefab_meta before world");
                             return Ok(CookedPrefab {
                                 world: world_deser.0,
-                                entities,
                             });
                         }
                     }
@@ -103,7 +90,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                 Err(serde::de::Error::missing_field("data"))
             }
         }
-        const FIELDS: &[&str] = &["entities", "world"];
+        const FIELDS: &[&str] = &["world"];
         deserializer.deserialize_struct("Prefab", FIELDS, PrefabDeserVisitor)
     }
 }
@@ -131,6 +118,7 @@ impl<'de> Deserialize<'de> for WorldDeser {
             comp_types,
             comp_types_uuid
         };
+        // TODO support sharing universe
         let universe = legion::Universe::new();
         let custom_deserializer_seed = CustomDeserializerSeed {
             deserializer: &custom_deserializer,
@@ -138,7 +126,6 @@ impl<'de> Deserialize<'de> for WorldDeser {
         };
         use serde::de::DeserializeSeed;
         let world: World = custom_deserializer_seed.deserialize(deserializer).unwrap();
-        // TODO support sharing universe
         Ok(WorldDeser(world))
     }
 }

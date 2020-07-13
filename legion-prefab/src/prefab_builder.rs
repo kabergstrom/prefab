@@ -8,31 +8,6 @@ use crate::{CookedPrefab, CopyCloneImpl, Prefab};
 use fnv::FnvHashMap;
 use std::hash::BuildHasher;
 
-pub struct EntityInfo {
-    before_entity: Entity,
-    after_entity: Entity,
-}
-
-impl EntityInfo {
-    pub fn new(
-        before_entity: Entity,
-        after_entity: Entity,
-    ) -> Self {
-        EntityInfo {
-            before_entity,
-            after_entity,
-        }
-    }
-
-    pub fn before_entity(&self) -> Entity {
-        self.before_entity
-    }
-
-    pub fn after_entity(&self) -> Entity {
-        self.after_entity
-    }
-}
-
 pub struct PrefabBuilder {
     // This is the snapshot of the world when the transaction starts
     before_world: legion::world::World,
@@ -40,9 +15,6 @@ pub struct PrefabBuilder {
     // This is the world that a downstream caller can manipulate. We will diff the data here against
     // the before_world to produce diffs
     after_world: legion::world::World,
-
-    // All known entities throughout the transaction
-    uuid_to_entities: FnvHashMap<EntityUuid, EntityInfo>,
 
     parent_prefab: PrefabUuid,
 }
@@ -59,41 +31,27 @@ impl PrefabBuilder {
         prefab_uuid: PrefabUuid,
         prefab: CookedPrefab,
         universe: &Universe,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Self {
         let mut before_world = universe.create_world();
-        unimplemented!();
-        // let mut before_result_mappings = HashMap::new();
-        // before_world.clone_from(
-        //     &prefab.world,
-        //     clone_impl,
-        //     &mut legion::world::HashMapCloneImplResult(&mut before_result_mappings),
-        //     &legion::world::NoneEntityReplacePolicy,
-        // );
+        before_world.clone_from(
+            &prefab.world,
+            &legion::query::any(),
+            &mut clone_impl,
+        );
 
         let mut after_world = universe.create_world();
-        unimplemented!();
-        // let mut after_result_mappings = HashMap::new();
-        // after_world.clone_from(
-        //     &prefab.world,
-        //     clone_impl,
-        //     &mut legion::world::HashMapCloneImplResult(&mut after_result_mappings),
-        //     &legion::world::NoneEntityReplacePolicy,
-        // );
+        after_world.clone_from(
+            &prefab.world,
+            &legion::query::any(),
+            &mut clone_impl,
+        );
 
-        // let mut uuid_to_entities = FnvHashMap::default();
-        // for (uuid, entity) in &prefab.entities {
-        //     let before_entity = before_result_mappings[entity];
-        //     let after_entity = after_result_mappings[entity];
-        //     uuid_to_entities.insert(*uuid, EntityInfo::new(before_entity, after_entity));
-        // }
-        //
-        // PrefabBuilder {
-        //     before_world,
-        //     after_world,
-        //     uuid_to_entities,
-        //     parent_prefab: prefab_uuid,
-        // }
+        PrefabBuilder {
+            before_world,
+            after_world,
+            parent_prefab: prefab_uuid,
+        }
     }
 
     pub fn world(&self) -> &World {
@@ -104,48 +62,38 @@ impl PrefabBuilder {
         &mut self.after_world
     }
 
-    pub fn uuid_to_entity(
-        &self,
-        uuid: EntityUuid,
-    ) -> Option<Entity> {
-        self.uuid_to_entities.get(&uuid).map(|x| x.after_entity())
-    }
-
     pub fn create_prefab<S: BuildHasher>(
         &mut self,
         universe: &Universe,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = universe.create_world();
 
-        let mut preexisting_after_entities = HashSet::new();
-        for entity_info in self.uuid_to_entities.values() {
-            if !self.after_world.contains(entity_info.after_entity) {
+        // Find all the entities in the before world. Check that they weren't deleted (which we
+        // don't support).
+        let mut all = Entity::query();
+        for before_entity in all.iter(&self.before_world) {
+            if !self.after_world.contains(*before_entity) {
                 // We do not support deleting entities in child prefabs
                 return Err(PrefabBuilderError::EntityDeleted);
             }
-
-            preexisting_after_entities.insert(entity_info.after_entity);
         }
 
-        // Find the entities that have been added
-        let mut all = Entity::query();
+        // Find the entities that have been added (i.e. are in the after_world but not the
+        // before_world) and copy them into new_prefab_world
         for after_entity in all.iter(&self.after_world) {
-            if !preexisting_after_entities.contains(&after_entity) {
-                unimplemented!();
-                // let new_entity = new_prefab_world.clone_from_single(
-                //     &self.after_world,
-                //     after_entity,
-                //     clone_impl,
-                //     None,
-                // );
+            if !self.before_world.contains(*after_entity) {
+                new_prefab_world.clone_from_single(
+                    &self.after_world,
+                    *after_entity,
+                    &mut clone_impl,
+                );
             }
         }
 
         let mut entity_overrides = HashMap::new();
-
-        for (entity_uuid, entity_info) in &self.uuid_to_entities {
+        for entity in all.iter(&self.after_world) {
             let mut component_overrides = vec![];
 
             for (component_type, registration) in registered_components {
@@ -155,9 +103,9 @@ impl PrefabBuilder {
                 let result = registration.diff_single(
                     &mut erased,
                     &self.before_world,
-                    Some(entity_info.before_entity()),
+                    Some(*entity),
                     &self.after_world,
-                    Some(entity_info.after_entity()),
+                    Some(*entity),
                 );
 
                 match result {
@@ -181,9 +129,9 @@ impl PrefabBuilder {
                     }
                 }
             }
-
+            let entity_uuid = universe.canon().get_name(*entity).unwrap();
             if !component_overrides.is_empty() {
-                entity_overrides.insert(*entity_uuid, component_overrides);
+                entity_overrides.insert(entity_uuid, component_overrides);
             }
         }
 

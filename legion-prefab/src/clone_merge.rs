@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::ComponentRegistration;
-use legion::storage::{ComponentMeta, ComponentTypeId, Component, ComponentStorage};
+use legion::storage::{ComponentMeta, ComponentTypeId, Component, ComponentStorage, Components, EntityLayout, Archetype, ArchetypeWriter};
 use legion::*;
 use std::mem::MaybeUninit;
 use std::ops::Range;
@@ -9,6 +9,7 @@ use std::hash::BuildHasher;
 
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
+#[derive(Copy, Clone)]
 pub struct CopyCloneImpl<'a, S: BuildHasher> {
     components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>,
 }
@@ -18,37 +19,36 @@ impl<'a, S: BuildHasher> CopyCloneImpl<'a, S> {
         Self { components }
     }
 }
-/*
-impl<'a, S: BuildHasher> legion::world::CloneImpl for CopyCloneImpl<'a, S> {
-    fn map_component_type(
-        &self,
-        component_type: ComponentTypeId,
-    ) -> (ComponentTypeId, ComponentMeta) {
-        let comp_reg = &self.components[&component_type];
-        (comp_reg.component_type_id(), *comp_reg.meta())
+
+impl<'a, S: BuildHasher>  legion::world::Merger for CopyCloneImpl<'a, S> {
+    fn prefers_new_archetype() -> bool { false }
+
+    fn convert_layout(&mut self, source_layout: EntityLayout) -> EntityLayout {
+        let mut dest_layout = EntityLayout::default();
+        for component_type in source_layout.component_types() {
+            let comp_reg = &self.components[component_type];
+            comp_reg.register_component(&mut dest_layout);
+        }
+
+        dest_layout
     }
 
-    //TODO: Would be better if CloneImpl defined clone_components as unsafe
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn clone_components(
-        &self,
-        _src_world: &World,
-        //_src_component_storage: &ComponentStorage,
-        _src_component_storage_indexes: Range<ComponentIndex>,
-        src_type: ComponentTypeId,
-        _src_entities: &[Entity],
-        _dst_entities: &[Entity],
-        src_data: *const u8,
-        dst_data: *mut u8,
-        num_components: usize,
+    fn merge_archetype(
+        &mut self,
+        src_entity_range: Range<usize>,
+        src_arch: &Archetype,
+        src_components: &Components,
+        dst: &mut ArchetypeWriter,
     ) {
-        let comp_reg = &self.components[&src_type];
-        unsafe {
-            comp_reg.clone_components(src_data, dst_data, num_components);
+        for src_type in src_arch.layout().component_types() {
+            let comp_reg = &self.components[src_type];
+            unsafe {
+                comp_reg.clone_components(src_entity_range.clone(), src_arch, src_components, dst);
+            }
         }
     }
 }
-*/
+
 /// Trait for implementing clone merge mapping from one type to another
 pub trait SpawnFrom<FromT: Sized>
 where
@@ -279,17 +279,17 @@ impl SpawnCloneImplHandlerSet {
 /// providing custom mappings with add_mapping (which takes a closure) and add_mapping_into (which
 /// uses Rust standard library's .into(). If a mapping isn't provided for a type, the component
 /// will be cloned using ComponentRegistration passed in new()
-pub struct SpawnCloneImpl<'a, 'b, 'c> {
+pub struct SpawnCloneImpl<'a, 'b, 'c, S: BuildHasher> {
     handler_set: &'a SpawnCloneImplHandlerSet,
-    components: &'b HashMap<ComponentTypeId, ComponentRegistration>,
+    components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
     resources: &'c Resources,
 }
 
-impl<'a, 'b, 'c> SpawnCloneImpl<'a, 'b, 'c> {
+impl<'a, 'b, 'c, S: BuildHasher> SpawnCloneImpl<'a, 'b, 'c, S> {
     /// Creates a new implementation
     pub fn new(
         handler_set: &'a SpawnCloneImplHandlerSet,
-        components: &'b HashMap<ComponentTypeId, ComponentRegistration>,
+        components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
         resources: &'c Resources,
     ) -> Self {
         Self {
@@ -299,61 +299,63 @@ impl<'a, 'b, 'c> SpawnCloneImpl<'a, 'b, 'c> {
         }
     }
 }
-/*
-impl<'a, 'b, 'c> legion::world::CloneImpl for SpawnCloneImpl<'a, 'b, 'c> {
-    fn map_component_type(
-        &self,
-        component_type: ComponentTypeId,
-    ) -> (ComponentTypeId, ComponentMeta) {
-        // We expect any type we will encounter to be registered either as an explicit mapping or
-        // registered in the component registrations
-        let handler = &self.handler_set.handlers.get(&component_type);
-        if let Some(handler) = handler {
-            (handler.dst_type_id(), handler.dst_type_meta())
-        } else {
-            let comp_reg = &self.components[&component_type];
-            (comp_reg.component_type_id(), *comp_reg.meta())
+
+impl<'a, 'b, 'c, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'a, 'b, 'c, S> {
+    fn prefers_new_archetype() -> bool { false }
+
+    fn convert_layout(&mut self, source_layout: EntityLayout) -> EntityLayout {
+        let mut dest_layout = EntityLayout::default();
+        for component_type in source_layout.component_types() {
+            // We expect any type we will encounter to be registered either as an explicit mapping or
+            // registered in the component registrations
+            let handler = &self.handler_set.handlers.get(&component_type);
+            if let Some(handler) = handler {
+                let dst_type_id = handler.dst_type_id();
+                let comp_reg = &self.components[&dst_type_id];
+                comp_reg.register_component(&mut dest_layout);
+            } else {
+                let comp_reg = &self.components[component_type];
+                comp_reg.register_component(&mut dest_layout);
+            }
         }
+
+        dest_layout
     }
 
-    //TODO: Would be better if CloneImpl defined clone_components as unsafe
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn clone_components(
-        &self,
-        src_world: &World,
-        //src_component_storage: &ComponentStorage,
-        src_component_storage_indexes: Range<ComponentIndex>,
-        src_type: ComponentTypeId,
-        src_entities: &[Entity],
-        dst_entities: &[Entity],
-        src_data: *const u8,
-        dst_data: *mut u8,
-        num_components: usize,
+    fn merge_archetype(
+        &mut self,
+        src_entity_range: Range<usize>,
+        src_arch: &Archetype,
+        src_components: &Components,
+        dst: &mut ArchetypeWriter,
     ) {
-        // We expect any type we will encounter to be registered either as an explicit mapping or
-        // registered in the component registrations
-        let handler = &self.handler_set.handlers.get(&src_type);
-        if let Some(handler) = handler {
-            handler.clone_components(
-                src_world,
-                //src_component_storage,
-                src_component_storage_indexes,
-                self.resources,
-                src_entities,
-                dst_entities,
-                src_data,
-                dst_data,
-                num_components,
-            );
-        } else {
-            let comp_reg = &self.components[&src_type];
-            unsafe {
-                comp_reg.clone_components(src_data, dst_data, num_components);
+        for src_type in src_arch.layout().component_types() {
+            // We expect any type we will encounter to be registered either as an explicit mapping or
+            // registered in the component registrations
+            let handler = &self.handler_set.handlers.get(&src_type);
+            if let Some(handler) = handler {
+                unimplemented!();
+                // handler.clone_components(
+                //     src_world,
+                //     //src_component_storage,
+                //     src_component_storage_indexes,
+                //     self.resources,
+                //     src_entities,
+                //     dst_entities,
+                //     src_data,
+                //     dst_data,
+                //     num_components,
+                // );
+            } else {
+                let comp_reg = &self.components[&src_type];
+                unsafe {
+                    comp_reg.clone_components(src_entity_range.clone(), src_arch, src_components, dst);
+                }
             }
         }
     }
 }
-*/
+
 /// Used internally to dynamic dispatch into a Box<CloneMergeMappingImpl<T>>
 /// These are created as mappings are added to CloneMergeImpl
 trait SpawnCloneImplMapping: Send + Sync {
