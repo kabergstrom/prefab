@@ -3,6 +3,8 @@ use prefab_format::{ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use type_uuid::TypeUuid;
+use serde_diff::SerdeDiff;
+use legion::prelude::*;
 mod prefab_sample {
     include!("prefab_sample.rs.inc");
 }
@@ -33,6 +35,11 @@ struct World {
 }
 
 impl prefab_format::StorageDeserializer for &World {
+    fn begin_prefab(
+        &self,
+        _prefab: &PrefabUuid,
+    ) {
+    }
     fn begin_entity_object(
         &self,
         _prefab: &PrefabUuid,
@@ -153,7 +160,7 @@ fn main() {
                         let comp = erased_serde::deserialize::<Transform>(d)
                             .expect("failed to deserialize transform");
                         println!("deserialized {:#?}", comp);
-                        world.add_component(entity, comp);
+                        world.add_component(entity, comp).unwrap();
                     },
                     apply_diff: |d, world, entity| {
                         let mut comp = world

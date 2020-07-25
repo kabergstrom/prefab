@@ -2,6 +2,7 @@ use prefab_format::{self, ComponentTypeUuid, EntityUuid, PrefabUuid};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cell::RefCell;
 use type_uuid::TypeUuid;
+use serde_diff::{SerdeDiff, Apply};
 mod prefab_sample {
     include!("prefab_sample.rs.inc");
 }
@@ -18,6 +19,11 @@ struct World {
 }
 
 impl prefab_format::StorageDeserializer for World {
+    fn begin_prefab(
+        &self,
+        _prefab: &PrefabUuid,
+    ) {
+    }
     fn begin_entity_object(
         &self,
         _prefab: &PrefabUuid,
