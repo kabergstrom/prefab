@@ -54,6 +54,43 @@ fn option_iter_from_slice<X>(
     let mapped = opt.map(|x| (x[range.clone()]).iter());
     OptionIter::new(mapped, range.end - range.start)
 }
+
+pub fn get_component_slice_from_archetype<'a, T: Component>(
+    component_storage: &'a legion::storage::Components,
+    src_arch: &legion::storage::Archetype,
+    component_range: Range<usize>
+) -> Option<&'a [T]> {
+    unsafe {
+        // component_storage
+        //     .components(ComponentTypeId::of::<T>())
+        //     .map(|x| *x.get::<T>())
+
+        component_storage.get_downcast::<T>().map(|x| &x.get(src_arch.index()).unwrap().into_slice()[component_range])
+
+        // let components = component_storage.get_downcast::<T>();
+        // if let Some(components) = components {
+        //     Some(&components.get(src_arch.index()).unwrap().into_slice()[component_range])
+        // } else {
+        //     None
+        // }
+    }
+}
+
+pub fn iter_component_slice_from_archetype<'a, T: Component>(
+    component_storage: &'a legion::storage::Components,
+    src_arch: &legion::storage::Archetype,
+    component_range: Range<usize>
+) -> OptionIter<core::slice::Iter<'a, T>, &'a T> {
+    unsafe {
+        // component_storage
+        //     .components(ComponentTypeId::of::<T>())
+        //     .map(|x| *x.get::<T>())
+
+        let components = get_component_slice_from_archetype(component_storage, src_arch, component_range.clone());
+        option_iter_from_slice(components, component_range)
+    }
+}
+
 /*
 fn get_components_in_storage<'a, T: Component>(component_storage: &ComponentStorage<'a, T>) -> Option<&'a [T]> {
     unsafe {

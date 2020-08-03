@@ -11,6 +11,7 @@ use std::{
 use legion::serialize::{WorldSerializer, WorldDeserializer};
 use serde::de::DeserializeSeed;
 use crate::world_serde::{CustomSerializer, CustomDeserializer, CustomDeserializerSeed};
+use std::hash::BuildHasher;
 
 /// The data we override on a component of an entity in another prefab that we reference
 #[derive(Serialize, Deserialize)]
@@ -67,17 +68,28 @@ impl Prefab {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct PrefabSerdeContext<'a> {
-    pub registered_components: &'a HashMap<ComponentTypeUuid, ComponentRegistration>,
+pub struct PrefabSerdeContext<'a, T: BuildHasher> {
+    pub registered_components: &'a HashMap<ComponentTypeUuid, ComponentRegistration, T>,
 }
 
-pub struct PrefabFormatDeserializer<'a> {
-    prefab: RefCell<Option<Prefab>>,
-    context: PrefabSerdeContext<'a>,
+// Manual impl because T is not Clone
+impl<'a, T: BuildHasher> Clone for PrefabSerdeContext<'a, T> {
+    fn clone(&self) -> Self {
+        PrefabSerdeContext {
+            registered_components: self.registered_components.clone()
+        }
+    }
 }
-impl<'a> PrefabFormatDeserializer<'a> {
-    pub fn new(context: PrefabSerdeContext<'a>) -> Self {
+
+// Manual impl because T is not Copy
+impl<'a, T: BuildHasher> Copy for PrefabSerdeContext<'a, T> { }
+
+pub struct PrefabFormatDeserializer<'a, T: BuildHasher> {
+    prefab: RefCell<Option<Prefab>>,
+    context: PrefabSerdeContext<'a, T>,
+}
+impl<'a, T: BuildHasher> PrefabFormatDeserializer<'a, T> {
+    pub fn new(context: PrefabSerdeContext<'a, T>) -> Self {
         Self {
             prefab: RefCell::new(None),
             context,
@@ -90,7 +102,7 @@ impl<'a> PrefabFormatDeserializer<'a> {
     }
 }
 
-impl<'a> PrefabFormatDeserializer<'a> {
+impl<'a, T: BuildHasher> PrefabFormatDeserializer<'a, T> {
     fn get_or_insert_prefab_mut(
         &self,
         prefab_uuid: &PrefabUuid,
@@ -115,7 +127,7 @@ impl<'a> PrefabFormatDeserializer<'a> {
 
 // This implementation takes care of reading a prefab source file. As we walk through the source
 // file the functions here are called and we build out the data
-impl StorageDeserializer for PrefabFormatDeserializer<'_> {
+impl<T: BuildHasher> StorageDeserializer for PrefabFormatDeserializer<'_, T> {
     fn begin_prefab(
         &self,
         prefab: &PrefabUuid,
@@ -343,14 +355,14 @@ impl<'de> Deserialize<'de> for WorldDeser {
 }
 
 
-pub struct PrefabFormatSerializer<'a, 'b> {
+pub struct PrefabFormatSerializer<'a, 'b, T: BuildHasher> {
     prefab: &'b Prefab,
-    context: PrefabSerdeContext<'a>,
+    context: PrefabSerdeContext<'a, T>,
     type_id_to_uuid: HashMap<ComponentTypeId, ComponentTypeUuid>,
 }
-impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
+impl<'a, 'b, T: BuildHasher> PrefabFormatSerializer<'a, 'b, T> {
     pub fn new(
-        context: PrefabSerdeContext<'a>,
+        context: PrefabSerdeContext<'a, T>,
         prefab: &'b Prefab,
     ) -> Self {
         use std::iter::FromIterator;
@@ -366,7 +378,7 @@ impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
         }
     }
 }
-impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
+impl<T: BuildHasher> StorageSerializer for PrefabFormatSerializer<'_, '_, T> {
     fn entities(&self) -> Vec<EntityUuid> {
         let mut names = vec![];
         let mut all = Entity::query();

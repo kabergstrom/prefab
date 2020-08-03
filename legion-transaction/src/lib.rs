@@ -20,4 +20,6 @@ pub use transactions::TransactionEntityInfo;
 // A utility iterator that simplifies accessing values from SpawnFrom
 mod option_iter;
 pub use option_iter::OptionIter;
+pub use option_iter::get_component_slice_from_archetype;
+pub use option_iter::iter_component_slice_from_archetype;
 //pub use option_iter::iter_components_in_storage;

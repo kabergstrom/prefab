@@ -131,9 +131,9 @@ impl Transaction {
         &mut self.after_world
     }
 
-    pub fn create_transaction_diffs(
+    pub fn create_transaction_diffs<S: BuildHasher>(
         &mut self,
-        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
+        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, S>,
     ) -> TransactionDiffs {
         // These will contain the instructions to add/remove entities
         let mut apply_entity_diffs = vec![];
