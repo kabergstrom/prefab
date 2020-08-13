@@ -6,7 +6,7 @@ use std::mem::MaybeUninit;
 use std::ops::Range;
 use legion::storage::ComponentIndex;
 use std::hash::BuildHasher;
-use legion::world::{EntityRewrite, Allocate, Canon};
+use legion::world::{EntityRewrite, Allocate};
 
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
@@ -494,7 +494,6 @@ impl<'a, 'b, 'c, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'a, '
         &mut self,
         existing: Entity,
         allocator: &mut Allocate,
-        canon: &mut Canon,
     ) -> Entity {
         allocator.next().unwrap()
     }

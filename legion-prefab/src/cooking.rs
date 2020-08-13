@@ -6,14 +6,17 @@ use prefab_format::{PrefabUuid, ComponentTypeUuid};
 use std::hash::BuildHasher;
 
 pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
-    universe: &Universe,
     registered_components: &HashMap<ComponentTypeId, ComponentRegistration, S>,
     registered_components_by_uuid: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
     prefab_cook_order: &[PrefabUuid],
     prefab_lookup: &HashMap<PrefabUuid, &Prefab, U>,
 ) -> CookedPrefab {
     // Create a new world to hold the cooked data
-    let mut world = universe.create_world();
+    let mut world = World::default();
+
+    // This will allow us to look up the cooked entity ID by the entity's original UUID
+    let mut entity_lookup = HashMap::new();
+
     // merge all entity data from all prefabs. This data doesn't include any overrides, so order
     // doesn't matter
     for prefab in prefab_lookup.values() {
@@ -22,11 +25,18 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
         let mut clone_merge_impl = CopyCloneImpl::new(registered_components);
 
         // Clone all the entities from the prefab into the cooked world.
-        world.clone_from(
+        let result_mappings = world.clone_from(
             &prefab.world,
             &legion::query::any(),
             &mut clone_merge_impl
         );
+
+        // Iterate the entities in this prefab. Determine where they are stored in the cooked
+        // world and store this in entity_lookup
+        for (entity_uuid, prefab_entity) in &prefab.prefab_meta.entities {
+            let cooked_entity = result_mappings[prefab_entity];
+            entity_lookup.insert(*entity_uuid, cooked_entity);
+        }
     }
 
     // apply component override data. iteration of prefabs is in order such that "base" prefabs
@@ -38,10 +48,10 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
         // Iterate all the other prefabs that this prefab references
         for dependency_prefab_ref in prefab.prefab_meta.prefab_refs.values() {
             // Iterate all the entities for which we have override data
-            for (entity_uuid, component_overrides) in &dependency_prefab_ref.overrides {
+            for (entity_id, component_overrides) in &dependency_prefab_ref.overrides {
 
                 // Find where this entity is stored within the cooked data
-                let cooked_entity = universe.canon().get_id(entity_uuid).unwrap();
+                let cooked_entity = entity_lookup[entity_id];
 
                 // Iterate all the component types for which we have override data
                 for component_override in component_overrides {
@@ -61,5 +71,6 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     // the resulting world can now be saved
     crate::CookedPrefab {
         world,
+        entities: entity_lookup
     }
 }

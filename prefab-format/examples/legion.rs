@@ -147,11 +147,10 @@ fn read_prefab(
 }
 
 fn main() {
-    let universe = legion::world::Universe::new();
     use std::iter::FromIterator;
     let world = World {
         inner: RefCell::new(InnerWorld {
-            world: universe.create_world(),
+            world: legion::World::default(),
             entity_map: HashMap::new(),
             registered_components: HashMap::from_iter(vec![(
                 Transform::UUID,

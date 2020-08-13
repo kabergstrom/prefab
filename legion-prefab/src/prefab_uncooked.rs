@@ -10,7 +10,7 @@ use std::{
 };
 use legion::serialize::{WorldSerializer, WorldDeserializer};
 use serde::de::DeserializeSeed;
-use crate::world_serde::{CustomSerializer, CustomDeserializer, CustomDeserializerSeed};
+use crate::world_serde::{CustomSerializer, CustomDeserializer/*, CustomDeserializerSeed*/};
 use std::hash::BuildHasher;
 
 /// The data we override on a component of an entity in another prefab that we reference
@@ -39,6 +39,10 @@ pub struct PrefabMeta {
 
     /// The other prefabs that this prefab will include, plus the data we will override them with
     pub prefab_refs: HashMap<PrefabUuid, PrefabRef>,
+
+    #[serde(skip)]
+    // The entities that are stored in this prefab
+    pub entities: HashMap<EntityUuid, Entity>,
 }
 
 /// The uncooked prefab format. Raw entity data is stored in the legion::World. Metadata includes
@@ -55,8 +59,16 @@ pub struct Prefab {
 
 impl Prefab {
     pub fn new(world: World) -> Self {
+        let mut entities = HashMap::new();
+
+        let mut all = Entity::query();
+        for entity in all.iter(&world) {
+            entities.insert(*uuid::Uuid::new_v4().as_bytes(), *entity);
+        }
+
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
+            entities,
             prefab_refs: Default::default(),
         };
 
@@ -113,9 +125,10 @@ impl<'a, T: BuildHasher> PrefabFormatDeserializer<'a, T> {
         } else {
             prefab_cell.replace(Prefab {
                 // TODO support sharing universe
-                world: World::new(),
+                world: World::default(),
                 prefab_meta: PrefabMeta {
                     id: *prefab_uuid,
+                    entities: HashMap::new(),
                     prefab_refs: HashMap::new(),
                 },
             });
@@ -140,7 +153,8 @@ impl<T: BuildHasher> StorageDeserializer for PrefabFormatDeserializer<'_, T> {
         entity: &EntityUuid,
     ) {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        prefab.world.push_named(entity, ());
+        let new_entity = prefab.world.push(());
+        prefab.prefab_meta.entities.insert(*entity, new_entity);
     }
     fn end_entity_object(
         &self,
@@ -156,7 +170,12 @@ impl<T: BuildHasher> StorageDeserializer for PrefabFormatDeserializer<'_, T> {
         deserializer: D,
     ) -> Result<(), D::Error> {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        let entity = prefab.world.universe().canon().get_id(entity).expect("could not find prefab entity");
+        let entity = *prefab
+            .prefab_meta
+            .entities
+            .get(entity)
+            // deserializer implementation error, begin_entity_object shall always be called before deserialize_component
+            .expect("could not find prefab entity");
 
         let registered = self
             .context
@@ -337,19 +356,22 @@ impl<'de> Deserialize<'de> for WorldDeser {
                 .map(|reg| (*reg.uuid(), reg.clone())),
         );
 
-        let custom_deserializer = CustomDeserializer {
+        let mut custom_deserializer = CustomDeserializer {
             comp_types,
             comp_types_uuid
         };
+
+        let seed = legion::serialize::DeserializeNewWorld(&mut custom_deserializer);
+
         // TODO support sharing universe
-        let universe = legion::Universe::new();
-        let custom_deserializer_seed = CustomDeserializerSeed {
-            deserializer: &custom_deserializer,
-            universe: &universe
-        };
+        //let universe = legion::World::default();
+        // let custom_deserializer_seed = CustomDeserializerSeed {
+        //     deserializer: &custom_deserializer,
+        //     universe: &universe
+        // };
 
         use serde::de::DeserializeSeed;
-        let world: World = custom_deserializer_seed.deserialize(deserializer).unwrap();
+        let world: World = seed.deserialize(deserializer).unwrap();
         Ok(WorldDeser(world))
     }
 }
@@ -380,21 +402,14 @@ impl<'a, 'b, T: BuildHasher> PrefabFormatSerializer<'a, 'b, T> {
 }
 impl<T: BuildHasher> StorageSerializer for PrefabFormatSerializer<'_, '_, T> {
     fn entities(&self) -> Vec<EntityUuid> {
-        let mut names = vec![];
-        let mut all = Entity::query();
-        for entity in all.iter(&self.prefab.world) {
-            let name = self.prefab.world.universe().canon().get_name(*entity).expect("could not find prefab entity");
-            names.push(name);
-        }
-
-        names
+        self.prefab.prefab_meta.entities.keys().cloned().collect()
     }
 
     fn component_types(
         &self,
         entity_uuid: &EntityUuid,
     ) -> Vec<ComponentTypeUuid> {
-        let entity = self.prefab.world.universe().canon().get_id(entity_uuid).expect("could not find prefab entity");
+        let entity = self.prefab.prefab_meta.entities[entity_uuid];
         let e = self.prefab
             .world
             .entry_ref(entity)
@@ -416,7 +431,7 @@ impl<T: BuildHasher> StorageSerializer for PrefabFormatSerializer<'_, '_, T> {
     ) -> Result<S::Ok, S::Error> {
         let mut result = None;
         let mut serializer = Some(serializer);
-        let entity = self.prefab.world.universe().canon().get_id(entity_uuid).expect("could not find prefab entity");
+        let entity = self.prefab.prefab_meta.entities[entity_uuid];
         self.context.registered_components[component].serialize_single(
             &self.prefab.world,
             entity,

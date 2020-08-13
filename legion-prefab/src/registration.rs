@@ -1,5 +1,5 @@
 pub use inventory;
-use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex, Archetype, Components, ArchetypeWriter};
+use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex, Archetype, Components, ArchetypeWriter, UnknownComponentWriter};
 use serde::{
     de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer, Serialize,
