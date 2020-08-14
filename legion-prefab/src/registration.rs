@@ -120,8 +120,7 @@ type CompRegisterFn = fn(&mut EntityLayout);
 type CompSerializeFn =
     unsafe fn(*const u8, &mut dyn FnMut(&dyn erased_serde::Serialize));
 type CompDeserializeFn = fn(
-    storage: &mut UnknownComponentStorage,
-    arch_index: ArchetypeIndex,
+    storage: &mut UnknownComponentWriter,
     deserializer: &mut dyn erased_serde::Deserializer,
 ) -> Result<(), erased_serde::Error>;
 
@@ -215,11 +214,10 @@ impl ComponentRegistration {
 
     pub fn comp_deserialize(
         &self,
-        storage: &mut UnknownComponentStorage,
-        arch_index: ArchetypeIndex,
+        storage: &mut UnknownComponentWriter,
         deserializer: &mut dyn erased_serde::Deserializer,
     ) -> Result<(), erased_serde::Error> {
-        (self.comp_deserialize_fn)(storage, arch_index, deserializer)
+        (self.comp_deserialize_fn)(storage, deserializer)
     }
 
     pub fn deserialize_single(
@@ -322,13 +320,12 @@ impl ComponentRegistration {
             },
             comp_deserialize_fn: |
                 storage,
-                arch_index,
                 deserializer,
             | {
                 let mut components = erased_serde::deserialize::<Vec<T>>(deserializer)?;
                 unsafe {
                     let ptr = components.as_ptr();
-                    storage.extend_memcopy_raw(arch_index, ptr as *const u8, components.len());
+                    storage.extend_memcopy_raw(ptr as *const u8, components.len());
                     components.set_len(0);
                 }
                 Ok(())

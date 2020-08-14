@@ -258,6 +258,7 @@ impl Serialize for Prefab {
                 .map(|reg| (reg.component_type_id(), reg.clone())),
         );
 
+        //TODO: Need to use self.prefab_meta.entities to serialize
         let custom_serializer = CustomSerializer {
             comp_types,
         };
@@ -363,15 +364,14 @@ impl<'de> Deserialize<'de> for WorldDeser {
 
         let seed = legion::serialize::DeserializeNewWorld(&mut custom_deserializer);
 
-        // TODO support sharing universe
-        //let universe = legion::World::default();
         // let custom_deserializer_seed = CustomDeserializerSeed {
         //     deserializer: &custom_deserializer,
-        //     universe: &universe
         // };
 
         use serde::de::DeserializeSeed;
         let world: World = seed.deserialize(deserializer).unwrap();
+
+        //TODO: Need to return entity map generated during deserialization
         Ok(WorldDeser(world))
     }
 }
