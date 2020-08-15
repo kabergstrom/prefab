@@ -1,9 +1,10 @@
 use crate::format::EntityUuid;
+use crate::world_serde::{CustomDeserializer /*, CustomDeserializerSeed*/, CustomSerializer};
+use legion::World;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
+use std::cell::RefCell;
 use std::collections::HashMap;
-use crate::world_serde::{CustomSerializer, CustomDeserializer/*, CustomDeserializerSeed*/};
-use legion::World;
 
 pub struct CookedPrefab {
     pub world: legion::world::World,
@@ -11,10 +12,7 @@ pub struct CookedPrefab {
 }
 
 impl Serialize for CookedPrefab {
-    fn serialize<S>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -27,12 +25,18 @@ impl Serialize for CookedPrefab {
                 .map(|reg| (reg.component_type_id(), reg.clone())),
         );
 
+        let mut entity_map =
+            HashMap::from_iter(self.entities.iter().map(|(uuid, entity)| (*entity, *uuid)));
+
         //TODO: Need to use self.entities to serialize
         let custom_serializer = CustomSerializer {
-            comp_types,
+            comp_types: &comp_types,
+            entity_map: RefCell::new(&mut entity_map),
         };
 
-        let serializable_world = self.world.as_serializable(legion::query::any(), &custom_serializer);
+        let serializable_world = self
+            .world
+            .as_serializable(legion::query::any(), &custom_serializer);
         let mut struct_ser = serializer.serialize_struct("CookedPrefab", 2)?;
         struct_ser.serialize_field("entities", &self.entities)?;
         struct_ser.serialize_field("world", &serializable_world)?;
@@ -55,16 +59,10 @@ impl<'de> Deserialize<'de> for CookedPrefab {
         impl<'de> serde::de::Visitor<'de> for PrefabDeserVisitor {
             type Value = CookedPrefab;
 
-            fn expecting(
-                &self,
-                formatter: &mut std::fmt::Formatter,
-            ) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("struct CookedPrefab")
             }
-            fn visit_seq<V>(
-                self,
-                mut seq: V,
-            ) -> Result<Self::Value, V::Error>
+            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::SeqAccess<'de>,
             {
@@ -73,14 +71,11 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                 let world = seq.next_element::<WorldDeser>()?.expect("expected world");
                 Ok(CookedPrefab {
                     world: world.0,
-                    entities
+                    entities,
                 })
             }
 
-            fn visit_map<V>(
-                self,
-                mut map: V,
-            ) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::MapAccess<'de>,
             {
@@ -92,8 +87,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                         }
                         CookedPrefabField::World => {
                             let world_deser = map.next_value::<WorldDeser>()?;
-                            let entities =
-                                entities.expect("expected prefab_meta before world");
+                            let entities = entities.expect("expected prefab_meta before world");
                             return Ok(CookedPrefab {
                                 world: world_deser.0,
                                 entities,
@@ -108,9 +102,7 @@ impl<'de> Deserialize<'de> for CookedPrefab {
         deserializer.deserialize_struct("Prefab", FIELDS, PrefabDeserVisitor)
     }
 }
-struct WorldDeser(
-    legion::world::World,
-);
+struct WorldDeser(legion::world::World, HashMap<EntityUuid, legion::Entity>);
 impl<'de> Deserialize<'de> for WorldDeser {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -128,21 +120,23 @@ impl<'de> Deserialize<'de> for WorldDeser {
                 .map(|reg| (*reg.uuid(), reg.clone())),
         );
 
+        let mut entity_map = HashMap::new();
         let mut custom_deserializer = CustomDeserializer {
-            comp_types,
-            comp_types_uuid
+            comp_types: &comp_types,
+            comp_types_uuid: &comp_types_uuid,
+            entity_map: RefCell::new(&mut entity_map),
+            allocator: RefCell::new(legion::world::Allocate::new()),
         };
 
         // let custom_deserializer_seed = CustomDeserializerSeed {
         //     deserializer: &custom_deserializer,
         // };
 
-        let seed = legion::serialize::DeserializeNewWorld(&mut custom_deserializer);
+        let seed = legion::serialize::DeserializeNewWorld(&custom_deserializer);
 
         use serde::de::DeserializeSeed;
         let world: World = seed.deserialize(deserializer).unwrap();
 
-        //TODO: Need to return entity map generated during deserialization
-        Ok(WorldDeser(world))
+        Ok(WorldDeser(world, entity_map))
     }
 }
