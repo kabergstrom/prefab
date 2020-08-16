@@ -1,5 +1,5 @@
 pub use inventory;
-use legion::storage::{ArchetypeDescription, ComponentMeta, ComponentResourceSet, TagStorage};
+use legion::storage::{EntityLayout, ComponentStorage, UnknownComponentStorage, ArchetypeIndex, Archetype, Components, ArchetypeWriter, UnknownComponentWriter};
 use serde::{
     de::{self, DeserializeSeed, IgnoredAny, Visitor},
     Deserialize, Deserializer, Serialize,
@@ -8,7 +8,9 @@ use serde_diff::SerdeDiff;
 use std::{any::TypeId, marker::PhantomData, ptr::NonNull};
 use type_uuid::TypeUuid;
 use legion::storage::ComponentTypeId;
-use legion::prelude::EntityStore;
+use legion::EntityStore;
+use legion::world::{Entity, World};
+use std::ops::Range;
 
 struct ComponentDeserializer<'de, T: Deserialize<'de>> {
     ptr: *mut T,
@@ -105,63 +107,6 @@ impl<'de, 'a, T: for<'b> Deserialize<'b> + 'static> Visitor<'de>
     }
 }
 
-#[derive(Clone)]
-pub struct TagRegistration {
-    pub(crate) uuid: type_uuid::Bytes,
-    pub(crate) ty: TypeId,
-    pub(crate) tag_serialize_fn: fn(&TagStorage, &mut dyn FnMut(&dyn erased_serde::Serialize)),
-    pub(crate) tag_deserialize_fn: fn(
-        deserializer: &mut dyn erased_serde::Deserializer,
-        &mut TagStorage,
-    ) -> Result<(), erased_serde::Error>,
-    pub(crate) register_tag_fn: fn(&mut ArchetypeDescription),
-}
-
-impl TagRegistration {
-    pub fn uuid(&self) -> &type_uuid::Bytes {
-        &self.uuid
-    }
-
-    pub fn ty(&self) -> TypeId {
-        self.ty
-    }
-
-    pub fn of<
-        T: TypeUuid
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Clone
-            + Send
-            + Sync
-            + 'static,
-    >() -> Self {
-        Self {
-            uuid: T::UUID,
-            ty: TypeId::of::<T>(),
-            tag_serialize_fn: |tag_storage, serialize_fn| {
-                // it's safe because we know this is the correct type due to lookup
-                let slice = unsafe { tag_storage.data_slice::<T>() };
-                serialize_fn(&&*slice);
-            },
-            tag_deserialize_fn: |deserializer, tag_storage| {
-                // TODO implement visitor to avoid allocation of Vec
-                let tag_vec = <Vec<T> as Deserialize>::deserialize(deserializer)?;
-                for tag in tag_vec {
-                    // Tag types should line up, making this safe
-                    unsafe {
-                        tag_storage.push(tag);
-                    }
-                }
-                Ok(())
-            },
-            register_tag_fn: |desc| {
-                desc.register_tag::<T>();
-            },
-        }
-    }
-}
-
 #[derive(PartialEq)]
 pub enum DiffSingleResult {
     NoChange,
@@ -170,59 +115,79 @@ pub enum DiffSingleResult {
     Remove,
 }
 
-type CompSerializeFn =
-    unsafe fn(&ComponentResourceSet, &mut dyn FnMut(&dyn erased_serde::Serialize));
+type CompRegisterFn = fn(&mut EntityLayout);
+type CompSerializeFn = fn(
+    *const u8,
+    &mut dyn FnMut(&dyn erased_serde::Serialize)
+);
+type CompSerializeSliceFn = fn(
+    storage: &dyn UnknownComponentStorage,
+    archetype: ArchetypeIndex,
+    serialize_fn: &mut dyn FnMut(&dyn erased_serde::Serialize)
+);
 type CompDeserializeFn = fn(
-    deserializer: &mut dyn erased_serde::Deserializer,
-    get_next_storage_fn: &mut dyn FnMut() -> Option<(NonNull<u8>, usize)>,
-) -> Result<(), erased_serde::Error>;
-type CompRegisterFn = fn(&mut ArchetypeDescription);
-type DeserializeSingleFn = fn(
     &mut dyn erased_serde::Deserializer,
-    &mut legion::world::World,
-    legion::entity::Entity,
-) -> Result<(), legion::world::EntityMutationError>;
+) -> Result<Box<[u8]>, erased_serde::Error>;
+type CompDeserializeSliceFn = fn(
+    storage: UnknownComponentWriter,
+    deserializer: &mut dyn erased_serde::Deserializer,
+) -> Result<(), erased_serde::Error>;
 type SerializeSingleFn =
-    fn(&legion::world::World, legion::entity::Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
+    fn(&World, Entity, &mut dyn FnMut(&dyn erased_serde::Serialize));
 type DiffSingleFn = fn(
     &mut dyn erased_serde::Serializer,
-    &legion::world::World,
-    Option<legion::entity::Entity>,
-    &legion::world::World,
-    Option<legion::entity::Entity>,
+    &World,
+    Option<Entity>,
+    &World,
+    Option<Entity>,
 ) -> DiffSingleResult;
 type ApplyDiffFn =
-    fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity);
-type CompCloneFn = fn(*const u8, *mut u8, usize);
+    fn(&mut dyn erased_serde::Deserializer, &mut World, Entity);
+type CompCloneFn = fn(
+    src_entity_range: Range<usize>,
+    src_arch: &Archetype,
+    src_components: &legion::storage::Components,
+    dst: &mut ArchetypeWriter,
+);
 type AddDefaultToEntityFn = fn(
-    &mut legion::world::World,
-    legion::entity::Entity,
-) -> Result<(), legion::world::EntityMutationError>;
+    &mut World,
+    Entity,
+);
+type AddToEntityFn = fn(
+    &mut dyn erased_serde::Deserializer,
+    &mut World,
+    Entity,
+);
 type RemoveFromEntityFn = fn(
-    &mut legion::world::World,
-    legion::entity::Entity,
-) -> Result<(), legion::world::EntityMutationError>;
+    &mut World,
+    Entity,
+);
 
 #[derive(Clone)]
 pub struct ComponentRegistration {
-    pub(crate) component_type_id: ComponentTypeId,
-    pub(crate) uuid: type_uuid::Bytes,
-    pub(crate) ty: TypeId,
-    pub(crate) meta: ComponentMeta,
-    pub(crate) type_name: &'static str,
-    pub(crate) comp_serialize_fn: CompSerializeFn,
-    pub(crate) comp_deserialize_fn: CompDeserializeFn,
-    pub(crate) register_comp_fn: CompRegisterFn,
-    pub(crate) deserialize_single_fn: DeserializeSingleFn,
-    pub(crate) serialize_single_fn: SerializeSingleFn,
-    pub(crate) diff_single_fn: DiffSingleFn,
-    pub(crate) apply_diff_fn: ApplyDiffFn,
-    pub(crate) comp_clone_fn: CompCloneFn,
-    pub(crate) add_default_to_entity_fn: AddDefaultToEntityFn,
-    pub(crate) remove_from_entity_fn: RemoveFromEntityFn,
+    component_type_id: ComponentTypeId,
+    uuid: type_uuid::Bytes,
+    ty: TypeId,
+    type_name: &'static str,
+    register_comp_fn: CompRegisterFn,
+    comp_serialize_fn: CompSerializeFn,
+    comp_serialize_slice_fn: CompSerializeSliceFn,
+    comp_deserialize_fn: CompDeserializeFn,
+    comp_deserialize_slice_fn: CompDeserializeSliceFn,
+    serialize_single_fn: SerializeSingleFn,
+    diff_single_fn: DiffSingleFn,
+    apply_diff_fn: ApplyDiffFn,
+    comp_clone_fn: CompCloneFn,
+    add_default_to_entity_fn: AddDefaultToEntityFn,
+    add_to_entity_fn: AddToEntityFn,
+    remove_from_entity_fn: RemoveFromEntityFn,
 }
 
 impl ComponentRegistration {
+    pub fn component_type_id(&self) -> ComponentTypeId {
+        self.component_type_id
+    }
+
     pub fn uuid(&self) -> &type_uuid::Bytes {
         &self.uuid
     }
@@ -231,80 +196,123 @@ impl ComponentRegistration {
         self.ty
     }
 
-    pub fn component_type_id(&self) -> ComponentTypeId {
-        self.component_type_id
-    }
-
-    pub fn meta(&self) -> &ComponentMeta {
-        &self.meta
-    }
-
     pub fn type_name(&self) -> &'static str {
         self.type_name
     }
 
-    pub fn deserialize_single(
-        &self,
-        deserializer: &mut dyn erased_serde::Deserializer,
-        world: &mut legion::world::World,
-        entity: legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError> {
-        (self.deserialize_single_fn)(deserializer, world, entity)
+    pub fn register_component(&self, layout: &mut EntityLayout) {
+        (self.register_comp_fn)(layout);
     }
 
+    // Used when serializing a legion world in a human-readable format
+    pub unsafe fn comp_serialize(
+        &self,
+        ptr: *const u8,
+        serialize_fn: &mut dyn FnMut(&dyn erased_serde::Serialize)
+    ) {
+        (self.comp_serialize_fn)(ptr, serialize_fn)
+    }
+
+    // Used when serializing a legion world in a non-human-readable format
+    pub unsafe fn comp_serialize_slice(
+        &self,
+        storage: &dyn UnknownComponentStorage,
+        archetype: ArchetypeIndex,
+        serialize_fn: &mut dyn FnMut(&dyn erased_serde::Serialize)
+    ) {
+        (self.comp_serialize_slice_fn)(storage, archetype, serialize_fn)
+    }
+
+    // Used when deserializing a legion world in a human-readable format
+    pub fn comp_deserialize(
+        &self,
+        deserializer: &mut dyn erased_serde::Deserializer,
+    ) -> Result<Box<[u8]>, erased_serde::Error> {
+        (self.comp_deserialize_fn)(deserializer)
+    }
+
+    // Used when deserializing a legion world in a non-human-readable format
+    pub fn comp_deserialize_slice(
+        &self,
+        storage: UnknownComponentWriter,
+        deserializer: &mut dyn erased_serde::Deserializer,
+    ) -> Result<(), erased_serde::Error> {
+        (self.comp_deserialize_slice_fn)(storage, deserializer)
+    }
+
+    // Used when serializing a single component into prefab format
+    pub fn serialize_single(
+        &self,
+        world: &legion::world::World,
+        entity: Entity,
+        serialize: &mut dyn FnMut(&dyn erased_serde::Serialize),
+    ) {
+        (self.serialize_single_fn)(world, entity, serialize);
+    }
+
+    // Adds a default instance of the component to the given entity
     pub fn add_default_to_entity(
         &self,
         world: &mut legion::world::World,
-        entity: legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError> {
+        entity: Entity,
+    ) {
         (self.add_default_to_entity_fn)(world, entity)
     }
 
+    // Used when deserializing a single component from prefab format
+    // Used when applying an "Add" diff command from a transaction to an entity
+    pub fn add_to_entity(
+        &self,
+        deserializer: &mut dyn erased_serde::Deserializer,
+        world: &mut legion::world::World,
+        entity: Entity,
+    ) {
+        (self.add_to_entity_fn)(deserializer, world, entity)
+    }
+
+    // Used when applying a "Remove" diff command from a transaction to an entity
     pub fn remove_from_entity(
         &self,
         world: &mut legion::world::World,
-        entity: legion::entity::Entity,
-    ) -> Result<(), legion::world::EntityMutationError> {
+        entity: Entity,
+    ) {
         (self.remove_from_entity_fn)(world, entity)
     }
 
+    // Used when creating prefabs
+    // Used for creating "modified" diff commands in a transaction
     pub fn diff_single(
         &self,
         ser: &mut dyn erased_serde::Serializer,
         src_world: &legion::world::World,
-        src_entity: Option<legion::entity::Entity>,
+        src_entity: Option<Entity>,
         dst_world: &legion::world::World,
-        dst_entity: Option<legion::entity::Entity>,
+        dst_entity: Option<Entity>,
     ) -> DiffSingleResult {
         (self.diff_single_fn)(ser, src_world, src_entity, dst_world, dst_entity)
     }
 
+    // Used for applying a diff stored in a prefab to an entity specified by an overridden prefab
+    // Used for applying "modified" diff commands in a transaction
     pub fn apply_diff(
         &self,
         de: &mut dyn erased_serde::Deserializer,
         world: &mut legion::world::World,
-        entity: legion::entity::Entity,
+        entity: Entity,
     ) {
         (self.apply_diff_fn)(de, world, entity);
     }
 
+    // Used to clone components from one world into another
     #[allow(clippy::missing_safety_doc)]
     pub unsafe fn clone_components(
         &self,
-        src: *const u8,
-        dst: *mut u8,
-        num_components: usize,
+        src_entity_range: Range<usize>,
+        src_arch: &Archetype,
+        src_components: &legion::storage::Components,
+        dst: &mut ArchetypeWriter,
     ) {
-        (self.comp_clone_fn)(src, dst, num_components);
-    }
-
-    pub fn serialize(
-        &self,
-        world: &legion::world::World,
-        entity: legion::entity::Entity,
-        serialize: &mut dyn FnMut(&dyn erased_serde::Serialize),
-    ) {
-        (self.serialize_single_fn)(world, entity, serialize);
+        (self.comp_clone_fn)(src_entity_range, src_arch, src_components, dst);
     }
 
     pub fn of<
@@ -316,57 +324,98 @@ impl ComponentRegistration {
             + Send
             + Sync
             + Default
+            + legion::storage::Component
             + 'static,
     >() -> Self {
-        let component_type_id = ComponentTypeId::of::<T>();
         Self {
             component_type_id: ComponentTypeId::of::<T>(),
             uuid: T::UUID,
-            ty: component_type_id.type_id(),
-            meta: ComponentMeta::of::<T>(),
+            ty: TypeId::of::<T>(),
             type_name: std::any::type_name::<T>(),
-            comp_serialize_fn: |comp_storage, serialize_fn| unsafe {
-                let slice = comp_storage.data_slice::<T>();
-                serialize_fn(&*slice);
+            register_comp_fn: |layout| {
+                layout.register_component::<T>();
             },
-            comp_deserialize_fn: |deserializer, get_next_storage_fn| {
-                let comp_seq_deser = ComponentSeqDeserializer::<T> {
-                    get_next_storage_fn,
-                    _marker: PhantomData,
-                };
-                comp_seq_deser.deserialize(deserializer)?;
+            comp_serialize_fn: |ptr, serialize_fn| unsafe {
+                let component_ptr = ptr as *const T;
+                unsafe {
+                    serialize_fn(&*component_ptr);
+                }
+            },
+            comp_serialize_slice_fn: |storage, archetype, serialize_fn| unsafe {
+                let (ptr, len) = storage.get_raw(archetype).unwrap();
+                let slice = std::slice::from_raw_parts(ptr as *const T, len);
+                (serialize_fn)(&slice);
+            },
+            comp_deserialize_fn: |d| {
+                let component = erased_serde::deserialize::<T>(d)?;
+                unsafe {
+                    let vec = std::slice::from_raw_parts(
+                        &component as *const T as *const u8,
+                        std::mem::size_of::<T>(),
+                    ).to_vec();
+                    std::mem::forget(component);
+                    Ok(vec.into_boxed_slice())
+                }
+            },
+            comp_deserialize_slice_fn: |
+                mut storage,
+                deserializer,
+            | {
+                let mut components = erased_serde::deserialize::<Vec<T>>(deserializer)?;
+                unsafe {
+                    let ptr = components.as_ptr();
+                    storage.extend_memcopy_raw(ptr as *const u8, components.len());
+                    components.set_len(0);
+                }
                 Ok(())
-            },
-            register_comp_fn: |desc| {
-                desc.register_component::<T>();
-            },
-            deserialize_single_fn: |d,
-                                    world,
-                                    entity|
-             -> Result<(), legion::world::EntityMutationError> {
-                // TODO propagate error
-                let comp =
-                    erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
-                world.add_component(entity, comp)
             },
             serialize_single_fn: |world, entity, s_fn| {
                 let comp = world
-                    .get_component::<T>(entity)
-                    .expect("entity not present when serializing component");
-                s_fn(&*comp)
+                    .entry_ref(entity)
+                    .unwrap();
+
+                s_fn(
+                    comp
+                        .get_component::<T>()
+                        .expect("entity not present when serializing component")
+                );
             },
             diff_single_fn: |ser, src_world, src_entity, dst_world, dst_entity| {
                 // TODO propagate error
-                let src_comp = src_entity.and_then(|e| src_world.get_component::<T>(e));
-                let dst_comp = dst_entity.and_then(|e| dst_world.get_component::<T>(e));
 
-                if let (Some(src_comp), Some(dst_comp)) = (&src_comp, &dst_comp) {
+                fn get_entry_ref<'a>(world: &'a World, entity: Option<Entity>) -> Option<legion::world::EntryRef<'a>> {
+                    entity.and_then(|e| {
+                        let entry_ref = world.entry_ref(e);
+                        match entry_ref {
+                            Ok(e) => Some(e),
+                            Err(legion::world::EntityAccessError::EntityNotFound) => None,
+                            Err(legion::world::EntityAccessError::AccessDenied) => panic!("Could not access world during diff"),
+                        }
+                    })
+                }
+
+                fn get_component<'a, T : legion::storage::Component>(entry: &'a Option<legion::world::EntryRef>) -> Option<&'a T> {
+                    entry.as_ref().and_then(|entry| match entry.get_component::<T>() {
+                        Ok(comp) => Some(comp),
+                        Err(legion::world::ComponentError::NotFound {..}) => None,
+                        Err(legion::world::ComponentError::Denied {..}) => panic!("Could not access component during diff")
+                    })
+                }
+
+
+                let src_entity = get_entry_ref(src_world, src_entity);
+                let dst_entity = get_entry_ref(dst_world, dst_entity);
+
+                let src_comp = get_component(&src_entity);
+                let dst_comp = get_component(&dst_entity);
+
+                if let (Some(src_comp), Some(dst_comp)) = (src_comp, dst_comp) {
                     //
                     // Component exists before and after the change. If differences exist, serialize
                     // a diff and return a Change result. Otherwise, serialize nothing and return
                     // NoChange
                     //
-                    let diff = serde_diff::Diff::serializable(&**src_comp, &**dst_comp);
+                    let diff = serde_diff::Diff::serializable(src_comp, dst_comp);
                     <serde_diff::Diff<T> as serde::ser::Serialize>::serialize(&diff, ser)
                         .expect("failed to serialize diff");
 
@@ -379,7 +428,7 @@ impl ComponentRegistration {
                     //
                     // Component was created, serialize the object and return an Add result
                     //
-                    erased_serde::serialize(&**dst_comp, ser).unwrap();
+                    erased_serde::serialize(dst_comp, ser).unwrap();
                     DiffSingleResult::Add
                 } else if src_comp.is_some() {
                     //
@@ -394,9 +443,13 @@ impl ComponentRegistration {
                 }
             },
             apply_diff_fn: |d, world, entity| {
-                // TODO propagate error
-                let mut comp = world
-                    .get_component_mut::<T>(entity)
+                //TODO: propagate error
+                let mut e = world
+                    .entry(entity)
+                    .unwrap();
+
+                let comp = e
+                    .get_component_mut::<T>()
                     .expect("expected component data when diffing");
                 let comp: &mut T = &mut *comp;
                 <serde_diff::Apply<T> as serde::de::DeserializeSeed>::deserialize(
@@ -405,40 +458,45 @@ impl ComponentRegistration {
                 )
                 .expect("failed to deserialize diff");
             },
-            comp_clone_fn: |src, dst, num_components| unsafe {
-                for i in 0..num_components {
-                    let src_ptr = (src as *const T).add(i);
-                    let dst_ptr = (dst as *mut T).add(i);
-                    std::ptr::write(dst_ptr, <T as Clone>::clone(&*src_ptr));
+            comp_clone_fn: |
+                src_entity_range,
+                src_arch,
+                src_components,
+                dst,
+            | unsafe {
+                let src_components = src_components.get(ComponentTypeId::of::<T>()).unwrap();
+                let src = src_components.downcast_ref::<T::Storage>().unwrap();
+                let mut dst = dst.claim_components::<T>();
+
+                let src_slice = &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range];
+                dst.ensure_capacity(src_slice.len());
+                for component in src_slice {
+                    let cloned = <T as Clone>::clone(&component);
+                    unsafe {
+                        dst.extend_memcopy(&cloned as *const T, 1);
+                        std::mem::forget(cloned);
+                    }
                 }
             },
-            add_default_to_entity_fn: |world, entity| world.add_component(entity, T::default()),
-            remove_from_entity_fn: |world, entity| world.remove_component::<T>(entity),
+            add_default_to_entity_fn: |world, entity| world.entry(entity).unwrap().add_component(T::default()),
+            add_to_entity_fn: |d,
+                                    world,
+                                    entity
+            | {
+                //TODO: propagate error
+                let comp =
+                    erased_serde::deserialize::<T>(d).expect("failed to deserialize component");
+                world.entry(entity).unwrap().add_component(comp);
+            },
+            remove_from_entity_fn: |world, entity| world.entry(entity).unwrap().remove_component::<T>(),
         }
     }
 }
 
-inventory::collect!(TagRegistration);
 inventory::collect!(ComponentRegistration);
 
 pub fn iter_component_registrations() -> impl Iterator<Item = &'static ComponentRegistration> {
     inventory::iter::<ComponentRegistration>.into_iter()
-}
-pub fn iter_tag_registrations() -> impl Iterator<Item = &'static TagRegistration> {
-    inventory::iter::<TagRegistration>.into_iter()
-}
-
-#[macro_export]
-macro_rules! register_tag_type {
-    ($tag_type:ty) => {
-        $crate::register_tag_type!(legion_prefab; $tag_type);
-    };
-    ($krate:ident; $tag_type:ty) => {
-        $crate::inventory::submit!{
-            #![crate = $krate]
-            $crate::TagRegistration::of::<$tag_type>()
-        }
-    };
 }
 
 #[macro_export]

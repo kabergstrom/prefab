@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use type_uuid::TypeUuid;
 use serde_diff::SerdeDiff;
-use legion::prelude::*;
+use legion::*;
 mod prefab_sample {
     include!("prefab_sample.rs.inc");
 }
@@ -19,14 +19,14 @@ struct Transform {
 
 struct RegisteredComponent {
     deserialize_fn:
-        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
+        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::Entity),
     apply_diff:
-        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::entity::Entity),
+        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::Entity),
 }
 
 struct InnerWorld {
     world: legion::world::World,
-    entity_map: HashMap<EntityUuid, legion::entity::Entity>,
+    entity_map: HashMap<EntityUuid, legion::Entity>,
     registered_components: HashMap<ComponentTypeUuid, RegisteredComponent>,
 }
 
@@ -46,7 +46,7 @@ impl prefab_format::StorageDeserializer for &World {
         entity: &EntityUuid,
     ) {
         let mut this = self.inner.borrow_mut();
-        let new_entity = this.world.insert((), vec![()])[0];
+        let new_entity = this.world.extend(vec![()])[0];
         this.entity_map.insert(*entity, new_entity);
     }
     fn end_entity_object(
@@ -147,11 +147,10 @@ fn read_prefab(
 }
 
 fn main() {
-    let universe = legion::world::Universe::new();
     use std::iter::FromIterator;
     let world = World {
         inner: RefCell::new(InnerWorld {
-            world: universe.create_world(),
+            world: legion::World::default(),
             entity_map: HashMap::new(),
             registered_components: HashMap::from_iter(vec![(
                 Transform::UUID,
@@ -160,11 +159,14 @@ fn main() {
                         let comp = erased_serde::deserialize::<Transform>(d)
                             .expect("failed to deserialize transform");
                         println!("deserialized {:#?}", comp);
-                        world.add_component(entity, comp).unwrap();
+                        world.entry(entity).unwrap().add_component(comp);
                     },
                     apply_diff: |d, world, entity| {
-                        let mut comp = world
-                            .get_component_mut::<Transform>(entity)
+                        let mut e = world
+                            .entry(entity)
+                            .unwrap();
+
+                        let comp = e.get_component_mut::<Transform>()
                             .expect("expected component data when diffing");
                         let comp: &mut Transform = &mut *comp;
                         println!("before diff {:#?}", comp);

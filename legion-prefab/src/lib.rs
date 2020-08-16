@@ -5,7 +5,7 @@ use prefab_format as format;
 
 mod registration;
 pub use registration::{
-    ComponentRegistration, TagRegistration, iter_component_registrations, iter_tag_registrations,
+    ComponentRegistration, iter_component_registrations,
     DiffSingleResult,
 };
 
@@ -23,7 +23,6 @@ pub use prefab_builder::PrefabBuilder;
 pub use prefab_builder::PrefabBuilderError;
 
 mod world_serde;
-pub use world_serde::{SerializeImpl, DeserializeImpl};
 
 mod cooking;
 pub use cooking::cook_prefab;
