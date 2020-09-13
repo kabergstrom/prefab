@@ -1,5 +1,5 @@
 use core::ops::Range;
-use legion::storage::ComponentStorage;
+use legion::storage::{ComponentStorage, ComponentSlice};
 use legion::storage::ComponentTypeId;
 use legion::storage::Component;
 use legion::storage::ComponentIndex;
@@ -61,7 +61,9 @@ pub fn get_component_slice_from_archetype<'a, T: Component>(
     component_range: Range<usize>
 ) -> Option<&'a [T]> {
     unsafe {
-        component_storage.get_downcast::<T>().map(|x| &x.get(src_arch.index()).unwrap().into_slice()[component_range])
+        let component_storage : Option<&T::Storage> = component_storage.get_downcast::<T>();
+        let slice : Option<ComponentSlice<'a, T>> = component_storage.map(|x| x.get(src_arch.index())).flatten();
+        slice.map(|x| x.into_slice())
     }
 }
 
