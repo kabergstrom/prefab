@@ -1,8 +1,6 @@
 use core::ops::Range;
 use legion::storage::{ComponentStorage, ComponentSlice};
-use legion::storage::ComponentTypeId;
 use legion::storage::Component;
-use legion::storage::ComponentIndex;
 
 /// Given an optional iterator, this will return Some(iter.next()) or Some(None) up to n times.
 /// For a simpler interface for a slice/range use create_option_iter_from_slice, which will return
@@ -58,22 +56,20 @@ fn option_iter_from_slice<X>(
 pub fn get_component_slice_from_archetype<'a, T: Component>(
     component_storage: &'a legion::storage::Components,
     src_arch: &legion::storage::Archetype,
-    component_range: Range<usize>
+    component_range: Range<usize>,
 ) -> Option<&'a [T]> {
-    unsafe {
-        let component_storage : Option<&T::Storage> = component_storage.get_downcast::<T>();
-        let slice : Option<ComponentSlice<'a, T>> = component_storage.map(|x| x.get(src_arch.index())).flatten();
-        slice.map(|x| x.into_slice())
-    }
+    let component_storage: Option<&T::Storage> = component_storage.get_downcast::<T>();
+    let slice: Option<ComponentSlice<'a, T>> =
+        component_storage.map(|x| x.get(src_arch.index())).flatten();
+    slice.map(|x| &x.into_slice()[component_range])
 }
 
 pub fn iter_component_slice_from_archetype<'a, T: Component>(
     component_storage: &'a legion::storage::Components,
     src_arch: &legion::storage::Archetype,
-    component_range: Range<usize>
+    component_range: Range<usize>,
 ) -> OptionIter<core::slice::Iter<'a, T>, &'a T> {
-    unsafe {
-        let components = get_component_slice_from_archetype(component_storage, src_arch, component_range.clone());
-        option_iter_from_slice(components, component_range)
-    }
+    let components =
+        get_component_slice_from_archetype(component_storage, src_arch, component_range.clone());
+    option_iter_from_slice(components, component_range)
 }

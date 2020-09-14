@@ -2,7 +2,6 @@ use legion::*;
 use prefab_format::{EntityUuid, ComponentTypeUuid, PrefabUuid};
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use crate::{ComponentRegistration, DiffSingleResult, ComponentOverride, PrefabMeta, PrefabRef};
 use crate::{CookedPrefab, CopyCloneImpl, Prefab};
 use fnv::FnvHashMap;
@@ -61,18 +60,12 @@ impl PrefabBuilder {
         mut clone_impl: CopyCloneImpl<S>,
     ) -> Self {
         let mut before_world = World::default();
-        let before_result_mappings = before_world.clone_from(
-            &prefab.world,
-            &legion::query::any(),
-            &mut clone_impl,
-        );
+        let before_result_mappings =
+            before_world.clone_from(&prefab.world, &legion::query::any(), &mut clone_impl);
 
         let mut after_world = World::default();
-        let after_result_mappings = after_world.clone_from(
-            &prefab.world,
-            &legion::query::any(),
-            &mut clone_impl,
-        );
+        let after_result_mappings =
+            after_world.clone_from(&prefab.world, &legion::query::any(), &mut clone_impl);
 
         let mut uuid_to_entities = FnvHashMap::default();
         for (uuid, entity) in &prefab.entities {
@@ -189,7 +182,7 @@ impl PrefabBuilder {
         let prefab_meta = PrefabMeta {
             id: *uuid::Uuid::new_v4().as_bytes(),
             prefab_refs,
-            entities: new_prefab_entities
+            entities: new_prefab_entities,
         };
 
         Ok(Prefab {

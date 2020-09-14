@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use crate::ComponentRegistration;
-use legion::storage::{ComponentMeta, ComponentTypeId, Component, ComponentStorage, Components, EntityLayout, Archetype, ArchetypeWriter, ComponentWriter};
+use legion::storage::{
+    ComponentTypeId, Component, ComponentStorage, Components, EntityLayout, Archetype,
+    ArchetypeWriter, ComponentWriter,
+};
 use legion::*;
-use std::mem::MaybeUninit;
 use std::ops::Range;
-use legion::storage::ComponentIndex;
 use std::hash::BuildHasher;
 use legion::world::{EntityRewrite, Allocate};
 use std::marker::PhantomData;
@@ -23,10 +24,15 @@ impl<'a, S: BuildHasher> CopyCloneImpl<'a, S> {
     }
 }
 
-impl<'a, S: BuildHasher>  legion::world::Merger for CopyCloneImpl<'a, S> {
-    fn prefers_new_archetype() -> bool { false }
+impl<'a, S: BuildHasher> legion::world::Merger for CopyCloneImpl<'a, S> {
+    fn prefers_new_archetype() -> bool {
+        false
+    }
 
-    fn convert_layout(&mut self, source_layout: EntityLayout) -> EntityLayout {
+    fn convert_layout(
+        &mut self,
+        source_layout: EntityLayout,
+    ) -> EntityLayout {
         let mut dest_layout = EntityLayout::default();
         for component_type in source_layout.component_types() {
             let comp_reg = &self.components[component_type];
@@ -64,7 +70,7 @@ where
         src_arch: &Archetype,
         src_components: &Components,
         dst: &mut ComponentWriter<Self>,
-        push_fn: fn(&mut ComponentWriter<Self>, Self)
+        push_fn: fn(&mut ComponentWriter<Self>, Self),
     );
 }
 
@@ -80,7 +86,7 @@ where
         src_arch: &Archetype,
         src_components: &Components,
         dst: &mut ComponentWriter<IntoT>,
-        push_fn: fn(&mut ComponentWriter<IntoT>, IntoT)
+        push_fn: fn(&mut ComponentWriter<IntoT>, IntoT),
     );
 }
 
@@ -95,7 +101,7 @@ where
         src_arch: &Archetype,
         src_components: &Components,
         dst: &mut ComponentWriter<IntoT>,
-        push_fn: fn(&mut ComponentWriter<IntoT>, IntoT)
+        push_fn: fn(&mut ComponentWriter<IntoT>, IntoT),
     ) {
         IntoT::spawn_from(
             resources,
@@ -129,25 +135,22 @@ impl SpawnCloneImplHandlerSet {
 
         let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
             into_type_id,
-            |
-                resources: &Resources,
-                src_entity_range: Range<usize>,
-                src_arch: &Archetype,
-                src_components: &Components,
-                dst: &mut ArchetypeWriter,
-            | {
+            |_resources: &Resources,
+             src_entity_range: Range<usize>,
+             src_arch: &Archetype,
+             src_components: &Components,
+             dst: &mut ArchetypeWriter| {
                 unsafe {
                     let src = src_components.get_downcast::<FromT>().unwrap();
                     let mut dst = dst.claim_components::<IntoT>();
 
-                    let src_slice = &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range];
+                    let src_slice =
+                        &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range];
                     dst.ensure_capacity(src_slice.len());
                     for component in src_slice {
                         let cloned = <FromT as Clone>::clone(&component).into();
-                        unsafe {
-                            dst.extend_memcopy(&cloned as *const IntoT, 1);
-                            std::mem::forget(cloned);
-                        }
+                        dst.extend_memcopy(&cloned as *const IntoT, 1);
+                        std::mem::forget(cloned);
                     }
                 }
             },
@@ -166,18 +169,17 @@ impl SpawnCloneImplHandlerSet {
 
         let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
             into_type_id,
-            |
-                resources: &Resources,
-                src_entity_range: Range<usize>,
-                src_arch: &Archetype,
-                src_components: &Components,
-                dst: &mut ArchetypeWriter,
-            | {
+            |resources: &Resources,
+             src_entity_range: Range<usize>,
+             src_arch: &Archetype,
+             src_components: &Components,
+             dst: &mut ArchetypeWriter| {
                 unsafe {
                     let src = src_components.get_downcast::<FromT>().unwrap();
                     let mut dst = dst.claim_components::<IntoT>();
 
-                    let src_slice = &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range.clone()];
+                    let src_slice =
+                        &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range.clone()];
                     dst.ensure_capacity(src_slice.len());
                     <FromT as SpawnInto<IntoT>>::spawn_into(
                         resources,
@@ -188,7 +190,7 @@ impl SpawnCloneImplHandlerSet {
                         |dst, into| {
                             dst.extend_memcopy(&into as *const IntoT, 1);
                             std::mem::forget(into);
-                        }
+                        },
                     );
                 }
             },
@@ -213,7 +215,7 @@ impl SpawnCloneImplHandlerSet {
                 &Archetype,                             // src_arch
                 &Components,                            // src_components
                 &mut ComponentWriter<IntoT>,            // dst
-                fn(&mut ComponentWriter<IntoT>, IntoT)  // push_fn
+                fn(&mut ComponentWriter<IntoT>, IntoT), // push_fn
             ) + Send
             + Sync
             + 'static,
@@ -223,20 +225,17 @@ impl SpawnCloneImplHandlerSet {
 
         let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
             into_type_id,
-            move |
-                resources: &Resources,
-                src_entity_range: Range<usize>,
-                src_arch: &Archetype,
-                src_components: &Components,
-                dst: &mut ArchetypeWriter,
-            | {
-
-
+            move |resources: &Resources,
+                  src_entity_range: Range<usize>,
+                  src_arch: &Archetype,
+                  src_components: &Components,
+                  dst: &mut ArchetypeWriter| {
                 unsafe {
                     let src = src_components.get_downcast::<FromT>().unwrap();
                     let mut dst = dst.claim_components::<IntoT>();
 
-                    let src_slice = &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range.clone()];
+                    let src_slice =
+                        &src.get(src_arch.index()).unwrap().into_slice()[src_entity_range.clone()];
                     dst.ensure_capacity(src_slice.len());
 
                     (clone_fn)(
@@ -248,7 +247,7 @@ impl SpawnCloneImplHandlerSet {
                         |dst, into| {
                             dst.extend_memcopy(&into as *const IntoT, 1);
                             std::mem::forget(into);
-                        }
+                        },
                     );
                 }
             },
@@ -268,7 +267,7 @@ pub struct SpawnCloneImpl<'a, 'b, 'c, 'd, S: BuildHasher> {
     handler_set: &'a SpawnCloneImplHandlerSet,
     components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
     resources: &'c Resources,
-    entity_map: &'d HashMap<Entity, Entity, EntityHasher>
+    entity_map: &'d HashMap<Entity, Entity, EntityHasher>,
 }
 
 impl<'a, 'b, 'c, 'd, S: BuildHasher> SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
@@ -277,19 +276,21 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher> SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
         handler_set: &'a SpawnCloneImplHandlerSet,
         components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
         resources: &'c Resources,
-        entity_map: &'d HashMap<Entity, Entity, EntityHasher>
+        entity_map: &'d HashMap<Entity, Entity, EntityHasher>,
     ) -> Self {
         Self {
             handler_set,
             components,
             resources,
-            entity_map
+            entity_map,
         }
     }
 }
 
-impl<'a, 'b, 'c, 'd, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
-    fn prefers_new_archetype() -> bool { false }
+impl<'a, 'b, 'c, 'd, S: BuildHasher> legion::world::Merger for SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
+    fn prefers_new_archetype() -> bool {
+        false
+    }
 
     /// Indicates how the merger wishes entity IDs to be adjusted while cloning a world.
     fn entity_map(&mut self) -> EntityRewrite {
@@ -311,7 +312,10 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'
         }
     }
 
-    fn convert_layout(&mut self, source_layout: EntityLayout) -> EntityLayout {
+    fn convert_layout(
+        &mut self,
+        source_layout: EntityLayout,
+    ) -> EntityLayout {
         let mut dest_layout = EntityLayout::default();
         for component_type in source_layout.component_types() {
             // We expect any type we will encounter to be registered either as an explicit mapping or
@@ -345,12 +349,17 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'
                     src_entity_range.clone(),
                     src_arch,
                     src_components,
-                    dst
+                    dst,
                 )
             } else {
                 let comp_reg = &self.components[&src_type];
                 unsafe {
-                    comp_reg.clone_components(src_entity_range.clone(), src_arch, src_components, dst);
+                    comp_reg.clone_components(
+                        src_entity_range.clone(),
+                        src_arch,
+                        src_components,
+                        dst,
+                    );
                 }
             }
         }
@@ -362,7 +371,10 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher>  legion::world::Merger for SpawnCloneImpl<'
 trait SpawnCloneImplMapping: Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
 
-    fn register_dst_type(&self, entity_layout: &mut EntityLayout);
+    fn register_dst_type(
+        &self,
+        entity_layout: &mut EntityLayout,
+    );
 
     #[allow(clippy::too_many_arguments)]
     fn clone_components(
@@ -378,30 +390,30 @@ trait SpawnCloneImplMapping: Send + Sync {
 struct SpawnCloneImplMappingImpl<F, IntoT>
 where
     F: Fn(
-        &Resources,                 // resources
-        Range<usize>,               // src_entity_range
-        &Archetype,                 // src_arch
-        &Components,                // src_components
-        &mut ArchetypeWriter,       // dst
+        &Resources,           // resources
+        Range<usize>,         // src_entity_range
+        &Archetype,           // src_arch
+        &Components,          // src_components
+        &mut ArchetypeWriter, // dst
     ),
-    IntoT: 'static
+    IntoT: 'static,
 {
     dst_type_id: ComponentTypeId,
     //dst_type_meta: ComponentMeta,
     clone_fn: F,
-    phantom_data: PhantomData<IntoT>
+    phantom_data: PhantomData<IntoT>,
 }
 
 impl<F, IntoT> SpawnCloneImplMappingImpl<F, IntoT>
 where
     F: Fn(
-        &Resources,                 // resources
-        Range<usize>,               // src_entity_range
-        &Archetype,                 // src_arch
-        &Components,                // src_components
-        &mut ArchetypeWriter,       // dst
+        &Resources,           // resources
+        Range<usize>,         // src_entity_range
+        &Archetype,           // src_arch
+        &Components,          // src_components
+        &mut ArchetypeWriter, // dst
     ),
-    IntoT: 'static
+    IntoT: 'static,
 {
     fn new(
         dst_type_id: ComponentTypeId,
@@ -410,7 +422,7 @@ where
         SpawnCloneImplMappingImpl {
             dst_type_id,
             clone_fn,
-            phantom_data: Default::default()
+            phantom_data: Default::default(),
         }
     }
 }
@@ -418,20 +430,23 @@ where
 impl<F, IntoT> SpawnCloneImplMapping for SpawnCloneImplMappingImpl<F, IntoT>
 where
     F: Fn(
-            &Resources,                 // resources
-            Range<usize>,               // src_entity_range
-            &Archetype,                 // src_arch
-            &Components,                // src_components
-            &mut ArchetypeWriter,       // dst
+            &Resources,           // resources
+            Range<usize>,         // src_entity_range
+            &Archetype,           // src_arch
+            &Components,          // src_components
+            &mut ArchetypeWriter, // dst
         ) + Send
         + Sync,
-    IntoT: 'static + Send + Sync
+    IntoT: 'static + Send + Sync,
 {
     fn dst_type_id(&self) -> ComponentTypeId {
         self.dst_type_id
     }
 
-    fn register_dst_type(&self, entity_layout: &mut EntityLayout) {
+    fn register_dst_type(
+        &self,
+        entity_layout: &mut EntityLayout,
+    ) {
         entity_layout.register_component::<IntoT>();
     }
 
@@ -443,12 +458,6 @@ where
         src_components: &Components,
         dst: &mut ArchetypeWriter,
     ) {
-        (self.clone_fn)(
-            resources,
-            src_entity_range,
-            src_arch,
-            src_components,
-            dst
-        );
+        (self.clone_fn)(resources, src_entity_range, src_arch, src_components, dst);
     }
 }

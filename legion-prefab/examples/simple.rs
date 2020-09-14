@@ -26,7 +26,7 @@ fn main() {
         let comp_registrations = legion_prefab::iter_component_registrations();
         use std::iter::FromIterator;
         let component_types: HashMap<ComponentTypeUuid, ComponentRegistration> =
-            HashMap::from_iter(comp_registrations.map(|reg| (reg.uuid().clone(), reg.clone())));
+            HashMap::from_iter(comp_registrations.map(|reg| (*reg.uuid(), reg.clone())));
 
         component_types
     };

@@ -46,14 +46,16 @@ impl TransactionBuilder {
         let mut uuid_to_entities = HashMap::new();
 
         for entity_info in self.entities {
-            let before_entity = before_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
-            let after_entity = after_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
+            let before_entity =
+                before_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
+            let after_entity =
+                after_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
             uuid_to_entities.insert(
                 entity_info.entity_uuid,
                 TransactionEntityInfo {
                     before_entity: Some(before_entity),
-                    after_entity: Some(after_entity)
-                }
+                    after_entity: Some(after_entity),
+                },
             );
         }
 

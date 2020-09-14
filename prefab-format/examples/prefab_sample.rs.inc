@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub const PREFAB1: &str = r#"Prefab(
     // Prefab AssetUuid
     id: "5fd8256d-db36-4fe2-8211-c7b3446e1927",

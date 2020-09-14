@@ -4,10 +4,7 @@ pub use inventory;
 use prefab_format as format;
 
 mod registration;
-pub use registration::{
-    ComponentRegistration, iter_component_registrations,
-    DiffSingleResult,
-};
+pub use registration::{ComponentRegistration, iter_component_registrations, DiffSingleResult};
 
 mod prefab_uncooked;
 pub use prefab_uncooked::{

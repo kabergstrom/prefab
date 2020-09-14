@@ -4,7 +4,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{cell::RefCell, collections::HashMap};
 use type_uuid::TypeUuid;
 use serde_diff::SerdeDiff;
-use legion::*;
 mod prefab_sample {
     include!("prefab_sample.rs.inc");
 }
@@ -20,8 +19,7 @@ struct Transform {
 struct RegisteredComponent {
     deserialize_fn:
         fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::Entity),
-    apply_diff:
-        fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::Entity),
+    apply_diff: fn(&mut dyn erased_serde::Deserializer, &mut legion::world::World, legion::Entity),
 }
 
 struct InnerWorld {
@@ -87,8 +85,7 @@ impl prefab_format::StorageDeserializer for &World {
     ) {
         let prefab = PREFABS
             .iter()
-            .filter(|p| &p.0 == target_prefab)
-            .nth(0)
+            .find(|p| &p.0 == target_prefab)
             .expect("failed to find prefab");
         println!("reading prefab {:?}", prefab.0);
         read_prefab(prefab.1, self);
@@ -126,7 +123,7 @@ impl prefab_format::StorageDeserializer for &World {
     }
 }
 
-const PREFABS: [(PrefabUuid, &'static str); 2] = [
+const PREFABS: [(PrefabUuid, &str); 2] = [
     (
         asset_uuid!("5fd8256d-db36-4fe2-8211-c7b3446e1927").0,
         prefab_sample::PREFAB1,
@@ -162,11 +159,10 @@ fn main() {
                         world.entry(entity).unwrap().add_component(comp);
                     },
                     apply_diff: |d, world, entity| {
-                        let mut e = world
-                            .entry(entity)
-                            .unwrap();
+                        let mut e = world.entry(entity).unwrap();
 
-                        let comp = e.get_component_mut::<Transform>()
+                        let comp = e
+                            .get_component_mut::<Transform>()
                             .expect("expected component data when diffing");
                         let comp: &mut Transform = &mut *comp;
                         println!("before diff {:#?}", comp);
