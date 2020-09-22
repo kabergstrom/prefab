@@ -162,7 +162,7 @@ pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     let prefab_meta = legion_prefab::PrefabMeta {
         id: prefab.prefab_meta.id,
         prefab_refs: Default::default(),
-        entities: uuid_to_new_entities
+        entities: uuid_to_new_entities,
     };
 
     Ok(legion_prefab::Prefab {
@@ -188,7 +188,7 @@ pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
 
     CookedPrefab {
         world: new_world,
-        entities: uuid_to_new_entities
+        entities: uuid_to_new_entities,
     }
 }
 
@@ -203,11 +203,7 @@ pub fn apply_diff<S: BuildHasher, U: BuildHasher, T: BuildHasher>(
     let mut new_world = World::default();
 
     // Copy everything from the opened prefab into the new world as a baseline
-    let result_mappings = new_world.clone_from(
-        world,
-        &legion::query::any(),
-        &mut clone_impl,
-    );
+    let result_mappings = new_world.clone_from(world, &legion::query::any(), &mut clone_impl);
 
     let mut uuid_to_new_entities = HashMap::default();
     for (uuid, prefab_entity) in uuid_to_entity {
@@ -263,8 +259,11 @@ pub fn apply_diff<S: BuildHasher, U: BuildHasher, T: BuildHasher>(
                             );
                         let mut de_erased = erased_serde::Deserializer::erase(&mut deserializer);
 
-                        component_registration
-                            .add_to_entity(&mut de_erased, &mut new_world, *new_prefab_entity);
+                        component_registration.add_to_entity(
+                            &mut de_erased,
+                            &mut new_world,
+                            *new_prefab_entity,
+                        );
                     }
                     ComponentDiffOp::Remove => {
                         //TODO: Detect if we need to make the change in the world or as an override

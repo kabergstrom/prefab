@@ -12,7 +12,10 @@ pub struct CookedPrefab {
 }
 
 impl Serialize for CookedPrefab {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -58,10 +61,16 @@ impl<'de> Deserialize<'de> for CookedPrefab {
         impl<'de> serde::de::Visitor<'de> for PrefabDeserVisitor {
             type Value = CookedPrefab;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("struct CookedPrefab")
             }
-            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+            fn visit_seq<V>(
+                self,
+                mut seq: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::SeqAccess<'de>,
             {
@@ -74,7 +83,10 @@ impl<'de> Deserialize<'de> for CookedPrefab {
                 })
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            fn visit_map<V>(
+                self,
+                mut map: V,
+            ) -> Result<Self::Value, V::Error>
             where
                 V: serde::de::MapAccess<'de>,
             {
@@ -120,7 +132,7 @@ impl<'de> Deserialize<'de> for WorldDeser {
         );
 
         let mut entity_map = HashMap::new();
-        let mut custom_deserializer = CustomDeserializer {
+        let custom_deserializer = CustomDeserializer {
             comp_types: &comp_types,
             comp_types_uuid: &comp_types_uuid,
             entity_map: RefCell::new(&mut entity_map),

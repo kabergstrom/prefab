@@ -599,7 +599,7 @@ impl<'de, T: DeserializeSeed<'de> + Clone> Visitor<'de> for SeqDeserializer<T> {
     where
         A: de::SeqAccess<'de>,
     {
-        while let Some(_) = seq.next_element_seed::<T>(self.0.clone())? {}
+        while seq.next_element_seed::<T>(self.0.clone())?.is_some() {}
         Ok(())
     }
 }

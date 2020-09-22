@@ -25,11 +25,8 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
         let mut clone_merge_impl = CopyCloneImpl::new(registered_components);
 
         // Clone all the entities from the prefab into the cooked world.
-        let result_mappings = world.clone_from(
-            &prefab.world,
-            &legion::query::any(),
-            &mut clone_merge_impl
-        );
+        let result_mappings =
+            world.clone_from(&prefab.world, &legion::query::any(), &mut clone_merge_impl);
 
         // Iterate the entities in this prefab. Determine where they are stored in the cooked
         // world and store this in entity_lookup
@@ -49,7 +46,6 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
         for dependency_prefab_ref in prefab.prefab_meta.prefab_refs.values() {
             // Iterate all the entities for which we have override data
             for (entity_id, component_overrides) in &dependency_prefab_ref.overrides {
-
                 // Find where this entity is stored within the cooked data
                 let cooked_entity = entity_lookup[entity_id];
 
@@ -71,6 +67,6 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     // the resulting world can now be saved
     crate::CookedPrefab {
         world,
-        entities: entity_lookup
+        entities: entity_lookup,
     }
 }
