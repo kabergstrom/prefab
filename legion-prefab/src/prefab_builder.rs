@@ -1,8 +1,7 @@
-use legion::prelude::*;
+use legion::*;
 use prefab_format::{EntityUuid, ComponentTypeUuid, PrefabUuid};
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use crate::{ComponentRegistration, DiffSingleResult, ComponentOverride, PrefabMeta, PrefabRef};
 use crate::{CookedPrefab, CopyCloneImpl, Prefab};
 use fnv::FnvHashMap;
@@ -58,26 +57,15 @@ impl PrefabBuilder {
     pub fn new<S: BuildHasher>(
         prefab_uuid: PrefabUuid,
         prefab: CookedPrefab,
-        universe: &Universe,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Self {
-        let mut before_world = universe.create_world();
-        let mut before_result_mappings = HashMap::new();
-        before_world.clone_from(
-            &prefab.world,
-            clone_impl,
-            &mut legion::world::HashMapCloneImplResult(&mut before_result_mappings),
-            &legion::world::NoneEntityReplacePolicy,
-        );
+        let mut before_world = World::default();
+        let before_result_mappings =
+            before_world.clone_from(&prefab.world, &legion::query::any(), &mut clone_impl);
 
-        let mut after_world = universe.create_world();
-        let mut after_result_mappings = HashMap::new();
-        after_world.clone_from(
-            &prefab.world,
-            clone_impl,
-            &mut legion::world::HashMapCloneImplResult(&mut after_result_mappings),
-            &legion::world::NoneEntityReplacePolicy,
-        );
+        let mut after_world = World::default();
+        let after_result_mappings =
+            after_world.clone_from(&prefab.world, &legion::query::any(), &mut clone_impl);
 
         let mut uuid_to_entities = FnvHashMap::default();
         for (uuid, entity) in &prefab.entities {
@@ -111,42 +99,37 @@ impl PrefabBuilder {
 
     pub fn create_prefab<S: BuildHasher>(
         &mut self,
-        universe: &Universe,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
-        let mut new_prefab_world = universe.create_world();
+        let mut new_prefab_world = World::default();
         let mut new_prefab_entities = HashMap::new();
 
-        let mut preexisting_after_entities = HashSet::new();
-        for entity_info in self.uuid_to_entities.values() {
-            if self
-                .after_world
-                .get_entity_location(entity_info.after_entity())
-                .is_none()
-            {
-                // Fail, an entity was deleted. This is not supported
+        // Find all the entities in the before world. Check that they weren't deleted (which we
+        // don't support).
+        let mut all = Entity::query();
+        for before_entity in all.iter(&self.before_world) {
+            if !self.after_world.contains(*before_entity) {
+                // We do not support deleting entities in child prefabs
                 return Err(PrefabBuilderError::EntityDeleted);
             }
-
-            preexisting_after_entities.insert(entity_info.after_entity());
         }
 
-        // Find the entities that have been added
-        for after_entity in self.after_world.iter_entities() {
-            if !preexisting_after_entities.contains(&after_entity) {
+        // Find the entities that have been added (i.e. are in the after_world but not the
+        // before_world) and copy them into new_prefab_world
+        for after_entity in all.iter(&self.after_world) {
+            if !self.before_world.contains(*after_entity) {
                 let new_entity = new_prefab_world.clone_from_single(
                     &self.after_world,
-                    after_entity,
-                    clone_impl,
-                    None,
+                    *after_entity,
+                    &mut clone_impl,
                 );
+
                 new_prefab_entities.insert(*uuid::Uuid::new_v4().as_bytes(), new_entity);
             }
         }
 
         let mut entity_overrides = HashMap::new();
-
         for (entity_uuid, entity_info) in &self.uuid_to_entities {
             let mut component_overrides = vec![];
 

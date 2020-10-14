@@ -1,4 +1,4 @@
-use legion::prelude::*;
+use legion::*;
 use legion_prefab::ComponentRegistration;
 use prefab_format::ComponentTypeUuid;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ fn main() {
         let comp_registrations = legion_prefab::iter_component_registrations();
         use std::iter::FromIterator;
         let component_types: HashMap<ComponentTypeUuid, ComponentRegistration> =
-            HashMap::from_iter(comp_registrations.map(|reg| (reg.uuid().clone(), reg.clone())));
+            HashMap::from_iter(comp_registrations.map(|reg| (*reg.uuid(), reg.clone())));
 
         component_types
     };
@@ -40,7 +40,7 @@ fn main() {
 
     let prefab = prefab_deser.prefab();
     println!("iterate positions");
-    let query = <legion::prelude::Read<Position2D>>::query();
+    let mut query = <legion::Read<Position2D>>::query();
     for pos in query.iter(&prefab.world) {
         println!("position: {:?}", pos.position);
     }

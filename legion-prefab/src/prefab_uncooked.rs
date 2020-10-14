@@ -1,9 +1,12 @@
 use crate::format::{ComponentTypeUuid, EntityUuid, PrefabUuid, StorageDeserializer, StorageSerializer};
+use crate::world_serde::{CustomDeserializer, CustomSerializer};
 use crate::ComponentRegistration;
-use legion::prelude::*;
-use legion::storage::{TagTypeId, ComponentTypeId};
+use legion::storage::ComponentTypeId;
+use legion::*;
+use serde::de::DeserializeSeed;
 use serde::{Deserialize, Serialize};
 use serde::{Deserializer, Serializer};
+use std::hash::BuildHasher;
 use std::{
     cell::{RefCell, RefMut},
     collections::HashMap,
@@ -37,7 +40,7 @@ pub struct PrefabMeta {
     pub prefab_refs: HashMap<PrefabUuid, PrefabRef>,
 
     #[serde(skip, default)]
-    /// The entities that are stored in this prefab
+    // The entities that are stored in this prefab
     pub entities: HashMap<EntityUuid, Entity>,
 }
 
@@ -56,8 +59,10 @@ pub struct Prefab {
 impl Prefab {
     pub fn new(world: World) -> Self {
         let mut entities = HashMap::new();
-        for entity in world.iter_entities() {
-            entities.insert(*uuid::Uuid::new_v4().as_bytes(), entity);
+
+        let mut all = Entity::query();
+        for entity in all.iter(&world) {
+            entities.insert(*uuid::Uuid::new_v4().as_bytes(), *entity);
         }
 
         let prefab_meta = PrefabMeta {
@@ -74,17 +79,28 @@ impl Prefab {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct PrefabSerdeContext<'a> {
-    pub registered_components: &'a HashMap<ComponentTypeUuid, ComponentRegistration>,
+pub struct PrefabSerdeContext<'a, T: BuildHasher> {
+    pub registered_components: &'a HashMap<ComponentTypeUuid, ComponentRegistration, T>,
 }
 
-pub struct PrefabFormatDeserializer<'a> {
-    prefab: RefCell<Option<Prefab>>,
-    context: PrefabSerdeContext<'a>,
+// Manual impl because T is not Clone
+impl<'a, T: BuildHasher> Clone for PrefabSerdeContext<'a, T> {
+    fn clone(&self) -> Self {
+        PrefabSerdeContext {
+            registered_components: self.registered_components,
+        }
+    }
 }
-impl<'a> PrefabFormatDeserializer<'a> {
-    pub fn new(context: PrefabSerdeContext<'a>) -> Self {
+
+// Manual impl because T is not Copy
+impl<'a, T: BuildHasher> Copy for PrefabSerdeContext<'a, T> {}
+
+pub struct PrefabFormatDeserializer<'a, T: BuildHasher> {
+    prefab: RefCell<Option<Prefab>>,
+    context: PrefabSerdeContext<'a, T>,
+}
+impl<'a, T: BuildHasher> PrefabFormatDeserializer<'a, T> {
+    pub fn new(context: PrefabSerdeContext<'a, T>) -> Self {
         Self {
             prefab: RefCell::new(None),
             context,
@@ -97,7 +113,7 @@ impl<'a> PrefabFormatDeserializer<'a> {
     }
 }
 
-impl<'a> PrefabFormatDeserializer<'a> {
+impl<'a, T: BuildHasher> PrefabFormatDeserializer<'a, T> {
     fn get_or_insert_prefab_mut(
         &self,
         prefab_uuid: &PrefabUuid,
@@ -108,7 +124,7 @@ impl<'a> PrefabFormatDeserializer<'a> {
         } else {
             prefab_cell.replace(Prefab {
                 // TODO support sharing universe
-                world: World::new(),
+                world: World::default(),
                 prefab_meta: PrefabMeta {
                     id: *prefab_uuid,
                     entities: HashMap::new(),
@@ -123,7 +139,7 @@ impl<'a> PrefabFormatDeserializer<'a> {
 
 // This implementation takes care of reading a prefab source file. As we walk through the source
 // file the functions here are called and we build out the data
-impl StorageDeserializer for PrefabFormatDeserializer<'_> {
+impl<T: BuildHasher> StorageDeserializer for PrefabFormatDeserializer<'_, T> {
     fn begin_prefab(
         &self,
         prefab: &PrefabUuid,
@@ -136,7 +152,7 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
         entity: &EntityUuid,
     ) {
         let mut prefab = self.get_or_insert_prefab_mut(prefab);
-        let new_entity = prefab.world.insert((), vec![()])[0];
+        let new_entity = prefab.world.push(());
         prefab.prefab_meta.entities.insert(*entity, new_entity);
     }
     fn end_entity_object(
@@ -159,6 +175,7 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
             .get(entity)
             // deserializer implementation error, begin_entity_object shall always be called before deserialize_component
             .expect("could not find prefab entity");
+
         let registered = self
             .context
             .registered_components
@@ -170,13 +187,11 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
                 ))
             })?;
 
-        //TODO: propagate error
-        (registered.deserialize_single_fn)(
+        registered.add_to_entity(
             &mut erased_serde::Deserializer::erase(deserializer),
             &mut prefab.world,
             entity,
-        )
-        .unwrap();
+        );
         Ok(())
     }
     fn begin_prefab_ref(
@@ -213,10 +228,6 @@ impl StorageDeserializer for PrefabFormatDeserializer<'_> {
             .prefab_refs
             .get_mut(prefab_ref)
             .expect("apply_component_diff called without begin_prefab_ref");
-        // let mut buffer = Vec::new();
-        // let mut serializer = serde_json::Serializer::new(&mut buffer);
-        // serde_transcode::transcode(deserializer, &mut serializer)
-        //     .map_err(<D::Error as serde::de::Error>::custom)?;
         let overrides = prefab_ref
             .overrides
             .entry(*entity)
@@ -239,31 +250,27 @@ impl Serialize for Prefab {
     {
         use serde::ser::SerializeStruct;
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
+
+        //TODO: Not good to allocate and throw away
         let comp_types = HashMap::from_iter(
             crate::registration::iter_component_registrations()
                 .map(|reg| (reg.component_type_id(), reg.clone())),
         );
+        let mut entity_map = HashMap::from_iter(
+            self.prefab_meta
+                .entities
+                .iter()
+                .map(|(uuid, entity)| (*entity, *uuid)),
+        );
 
-        // Providing this map ensures that UUIDs are preserved across serialization/deserialization
-        let mut entity_map = HashMap::with_capacity(self.prefab_meta.entities.len());
-        for (k, v) in &self.prefab_meta.entities {
-            entity_map.insert(*v, *k);
-        }
+        let custom_serializer = CustomSerializer {
+            comp_types: &comp_types,
+            entity_map: RefCell::new(&mut entity_map),
+        };
 
-        let serialize_impl = crate::SerializeImpl::new(tag_types, comp_types, entity_map);
-        let serializable_world =
-            legion::serialize::ser::serializable_world(&self.world, &serialize_impl);
+        let serializable_world = self
+            .world
+            .as_serializable(legion::query::any(), &custom_serializer);
         let mut struct_ser = serializer.serialize_struct("Prefab", 2)?;
         struct_ser.serialize_field("prefab_meta", &self.prefab_meta)?;
         struct_ser.serialize_field("world", &serializable_world)?;
@@ -341,47 +348,47 @@ impl<'de> Deserialize<'de> for Prefab {
         deserializer.deserialize_struct("Prefab", FIELDS, PrefabDeserVisitor)
     }
 }
-struct WorldDeser(World, HashMap<uuid::Bytes, Entity>);
+struct WorldDeser(World, HashMap<EntityUuid, legion::Entity>);
 impl<'de> Deserialize<'de> for WorldDeser {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         use std::iter::FromIterator;
-        let tag_types =
-            HashMap::from_iter(crate::registration::iter_tag_registrations().map(|reg| {
-                (
-                    TagTypeId(
-                        reg.ty(),
-                        #[cfg(feature = "ffi")]
-                        0,
-                    ),
-                    reg.clone(),
-                )
-            }));
+
+        //TODO: Not good to allocate and throw away
         let comp_types = HashMap::from_iter(
             crate::registration::iter_component_registrations()
                 .map(|reg| (reg.component_type_id(), reg.clone())),
         );
-        let deserialize_impl = crate::DeserializeImpl::new(tag_types, comp_types);
+        let comp_types_uuid = HashMap::from_iter(
+            crate::registration::iter_component_registrations()
+                .map(|reg| (*reg.uuid(), reg.clone())),
+        );
 
-        // TODO support sharing universe
-        let mut world = World::new();
-        let deserializable_world =
-            legion::serialize::de::deserializable(&mut world, &deserialize_impl);
-        serde::de::DeserializeSeed::deserialize(deserializable_world, deserializer)?;
-        Ok(WorldDeser(world, deserialize_impl.entity_map.into_inner()))
+        let mut entity_map = HashMap::new();
+        let custom_deserializer = CustomDeserializer {
+            comp_types: &comp_types,
+            comp_types_uuid: &comp_types_uuid,
+            entity_map: RefCell::new(&mut entity_map),
+            allocator: RefCell::new(legion::world::Allocate::new()),
+        };
+
+        let seed = legion::serialize::DeserializeNewWorld(&custom_deserializer);
+        let world: World = seed.deserialize(deserializer).unwrap();
+
+        Ok(WorldDeser(world, entity_map))
     }
 }
 
-pub struct PrefabFormatSerializer<'a, 'b> {
+pub struct PrefabFormatSerializer<'a, 'b, T: BuildHasher> {
     prefab: &'b Prefab,
-    context: PrefabSerdeContext<'a>,
+    context: PrefabSerdeContext<'a, T>,
     type_id_to_uuid: HashMap<ComponentTypeId, ComponentTypeUuid>,
 }
-impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
+impl<'a, 'b, T: BuildHasher> PrefabFormatSerializer<'a, 'b, T> {
     pub fn new(
-        context: PrefabSerdeContext<'a>,
+        context: PrefabSerdeContext<'a, T>,
         prefab: &'b Prefab,
     ) -> Self {
         use std::iter::FromIterator;
@@ -397,21 +404,27 @@ impl<'a, 'b> PrefabFormatSerializer<'a, 'b> {
         }
     }
 }
-impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
+impl<T: BuildHasher> StorageSerializer for PrefabFormatSerializer<'_, '_, T> {
     fn entities(&self) -> Vec<EntityUuid> {
         self.prefab.prefab_meta.entities.keys().cloned().collect()
     }
+
     fn component_types(
         &self,
         entity_uuid: &EntityUuid,
     ) -> Vec<ComponentTypeUuid> {
         let entity = self.prefab.prefab_meta.entities[entity_uuid];
-        self.prefab
+        let e = self
+            .prefab
             .world
-            .entity_component_types(entity)
-            .expect("entity not in World when serializing prefab")
+            .entry_ref(entity)
+            .expect("entity not in World when serializing prefab");
+
+        e.archetype()
+            .layout()
+            .component_types()
             .iter()
-            .filter_map(|(type_id, _)| self.type_id_to_uuid.get(type_id).cloned())
+            .filter_map(|type_id| self.type_id_to_uuid.get(type_id).cloned())
             .filter(|type_id| self.context.registered_components.contains_key(type_id))
             .collect()
     }
@@ -424,7 +437,7 @@ impl StorageSerializer for PrefabFormatSerializer<'_, '_> {
         let mut result = None;
         let mut serializer = Some(serializer);
         let entity = self.prefab.prefab_meta.entities[entity_uuid];
-        self.context.registered_components[component].serialize(
+        self.context.registered_components[component].serialize_single(
             &self.prefab.world,
             entity,
             &mut |comp| {

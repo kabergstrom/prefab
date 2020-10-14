@@ -1,4 +1,4 @@
-use legion::prelude::*;
+use legion::*;
 use prefab_format::{EntityUuid, ComponentTypeUuid};
 
 use std::collections::HashMap;
@@ -37,20 +37,19 @@ impl TransactionBuilder {
 
     pub fn begin<S: BuildHasher>(
         self,
-        universe: &Universe,
         src_world: &World,
-        clone_impl: &CopyCloneImpl<S>,
+        mut clone_impl: CopyCloneImpl<S>,
     ) -> Transaction {
-        let mut before_world = universe.create_world();
-        let mut after_world = universe.create_world();
+        let mut before_world = World::default();
+        let mut after_world = World::default();
 
         let mut uuid_to_entities = HashMap::new();
 
         for entity_info in self.entities {
             let before_entity =
-                before_world.clone_from_single(&src_world, entity_info.entity, clone_impl, None);
+                before_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
             let after_entity =
-                after_world.clone_from_single(&src_world, entity_info.entity, clone_impl, None);
+                after_world.clone_from_single(&src_world, entity_info.entity, &mut clone_impl);
             uuid_to_entities.insert(
                 entity_info.entity_uuid,
                 TransactionEntityInfo {
@@ -68,6 +67,7 @@ impl TransactionBuilder {
     }
 }
 
+//TODO: Remove this if possible
 pub struct TransactionEntityInfo {
     before_entity: Option<Entity>,
     after_entity: Option<Entity>,
@@ -151,9 +151,9 @@ impl Transaction {
         self.uuid_to_entities[&uuid].after_entity()
     }
 
-    pub fn create_transaction_diffs(
+    pub fn create_transaction_diffs<S: BuildHasher>(
         &mut self,
-        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
+        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, S>,
     ) -> TransactionDiffs {
         log::trace!("create diffs for {} entities", self.uuid_to_entities.len());
 
@@ -166,23 +166,18 @@ impl Transaction {
         let mut removed_entity_uuids = HashSet::new();
         for (entity_uuid, entity_info) in &self.uuid_to_entities {
             if let Some(after_entity) = entity_info.after_entity {
-                if self.after_world.get_entity_location(after_entity).is_none() {
+                if !self.after_world.contains(after_entity) {
                     removed_entity_uuids.insert(*entity_uuid);
-                    apply_entity_diffs.push(EntityDiff::new(*entity_uuid, EntityDiffOp::Remove));
-
-                    //TODO: This add wouldn't need to have an entity uuid with it, except that
-                    // we may generate component diffs below. It would be more efficient to let the
-                    // entity add contain all the data to create the entity anyways, but for a first
-                    // pass we'll just let the component diffs do it
                     revert_entity_diffs.push(EntityDiff::new(*entity_uuid, EntityDiffOp::Add));
+                    apply_entity_diffs.push(EntityDiff::new(*entity_uuid, EntityDiffOp::Remove));
                 }
 
                 preexisting_after_entities.insert(after_entity);
             }
         }
 
-        // Find the entities that have been added
-        for after_entity in self.after_world.iter_entities() {
+        let mut all = Entity::query();
+        for after_entity in all.iter(&self.after_world) {
             if !preexisting_after_entities.contains(&after_entity) {
                 let new_entity_uuid = uuid::Uuid::new_v4();
 
@@ -200,7 +195,7 @@ impl Transaction {
                 // and capture component data for it
                 self.uuid_to_entities.insert(
                     *new_entity_uuid.as_bytes(),
-                    TransactionEntityInfo::new(None, Some(after_entity)),
+                    TransactionEntityInfo::new(None, Some(*after_entity)),
                 );
             }
         }
