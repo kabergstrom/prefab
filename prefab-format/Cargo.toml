@@ -17,4 +17,4 @@ ron = "0.5"
 legion = { version = "0.3.0", default-features = false, features = ["serialize"] }
 linkme = "0.1"
 erased-serde = "0.3"
-atelier-core = { git = "https://github.com/amethyst/atelier-assets" }
+atelier-core = { git = "https://github.com/amethyst/atelier-assets", features = ["asset_uuid_macro"] }
