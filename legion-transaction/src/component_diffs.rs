@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use legion::*;
 use legion_prefab::DiffSingleResult;
 use legion_prefab::ComponentRegistration;
-use legion_prefab::CopyCloneImpl;
+use legion_prefab::CopyClone;
 use std::hash::BuildHasher;
 
 #[derive(Clone, Debug)]
@@ -145,7 +145,7 @@ pub fn apply_diff_to_prefab<S: BuildHasher, T: BuildHasher>(
     prefab: &Prefab,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
-    clone_impl: CopyCloneImpl<S>,
+    clone_impl: CopyClone<S>,
 ) -> Result<Prefab, ApplyDiffToPrefabError> {
     if !prefab.prefab_meta.prefab_refs.is_empty() {
         return Err(ApplyDiffToPrefabError::PrefabHasOverrides);
@@ -176,7 +176,7 @@ pub fn apply_diff_to_cooked_prefab<S: BuildHasher, T: BuildHasher>(
     cooked_prefab: &CookedPrefab,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
-    clone_impl: CopyCloneImpl<S>,
+    clone_impl: CopyClone<S>,
 ) -> CookedPrefab {
     let (new_world, uuid_to_new_entities) = apply_diff(
         &cooked_prefab.world,
@@ -197,7 +197,7 @@ pub fn apply_diff<S: BuildHasher, U: BuildHasher, T: BuildHasher>(
     uuid_to_entity: &HashMap<EntityUuid, Entity, T>,
     diff: &WorldDiff,
     registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, U>,
-    mut clone_impl: CopyCloneImpl<S>,
+    mut clone_impl: CopyClone<S>,
 ) -> (World, HashMap<EntityUuid, Entity>) {
     // Create an empty world to populate
     let mut new_world = World::default();
