@@ -13,7 +13,7 @@ pub use prefab_uncooked::{
 };
 
 mod prefab_cooked;
-pub use prefab_cooked::{CookedPrefab};
+pub use prefab_cooked::CookedPrefab;
 
 mod prefab_builder;
 pub use prefab_builder::PrefabBuilder;
@@ -32,3 +32,9 @@ pub use clone_merge::SpawnCloneImpl;
 pub use clone_merge::SpawnCloneImplHandlerSet;
 pub use clone_merge::SpawnFrom;
 pub use clone_merge::SpawnInto;
+
+// A utility iterator that simplifies accessing values from SpawnFrom
+mod option_iter;
+pub use option_iter::OptionIter;
+pub use option_iter::get_component_slice_from_archetype;
+pub use option_iter::iter_component_slice_from_archetype;
