@@ -14,17 +14,17 @@ use legion::world::EntityHasher;
 /// A trivial clone merge impl that does nothing but copy data. All component types must be
 /// cloneable and no type transformations are allowed
 #[derive(Copy, Clone)]
-pub struct CopyCloneImpl<'a, S: BuildHasher> {
+pub struct CopyClone<'a, S: BuildHasher> {
     components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>,
 }
 
-impl<'a, S: BuildHasher> CopyCloneImpl<'a, S> {
+impl<'a, S: BuildHasher> CopyClone<'a, S> {
     pub fn new(components: &'a HashMap<ComponentTypeId, ComponentRegistration, S>) -> Self {
         Self { components }
     }
 }
 
-impl<'a, S: BuildHasher> legion::world::Merger for CopyCloneImpl<'a, S> {
+impl<'a, S: BuildHasher> legion::world::Merger for CopyClone<'a, S> {
     fn prefers_new_archetype() -> bool {
         false
     }
@@ -114,13 +114,13 @@ where
     }
 }
 
-/// A registry of handlers for use with SpawnCloneImpl
+/// A registry of handlers for use with SpawnClone
 #[derive(Default)]
-pub struct SpawnCloneImplHandlerSet {
-    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneImplMapping>>,
+pub struct SpawnCloneHandlerSet {
+    handlers: HashMap<ComponentTypeId, Box<dyn SpawnCloneMapping>>,
 }
 
-impl SpawnCloneImplHandlerSet {
+impl SpawnCloneHandlerSet {
     /// Creates a new registry of handlers
     pub fn new() -> Self {
         Self::default()
@@ -133,7 +133,7 @@ impl SpawnCloneImplHandlerSet {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
 
-        let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
+        let handler = Box::new(SpawnCloneMappingImpl::<_, IntoT>::new(
             into_type_id,
             |_resources: &Resources,
              src_entity_range: Range<usize>,
@@ -167,7 +167,7 @@ impl SpawnCloneImplHandlerSet {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
 
-        let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
+        let handler = Box::new(SpawnCloneMappingImpl::<_, IntoT>::new(
             into_type_id,
             |resources: &Resources,
              src_entity_range: Range<usize>,
@@ -223,7 +223,7 @@ impl SpawnCloneImplHandlerSet {
         let from_type_id = ComponentTypeId::of::<FromT>();
         let into_type_id = ComponentTypeId::of::<IntoT>();
 
-        let handler = Box::new(SpawnCloneImplMappingImpl::<_, IntoT>::new(
+        let handler = Box::new(SpawnCloneMappingImpl::<_, IntoT>::new(
             into_type_id,
             move |resources: &Resources,
                   src_entity_range: Range<usize>,
@@ -257,23 +257,21 @@ impl SpawnCloneImplHandlerSet {
     }
 }
 
-/// A CloneMergeImpl that
-///
-/// An implementation passed into legion::world::World::clone_merge. This implementation supports
+/// An implementation passed into legion::world::World::clone_from. This implementation supports
 /// providing custom mappings with add_mapping (which takes a closure) and add_mapping_into (which
 /// uses Rust standard library's .into(). If a mapping isn't provided for a type, the component
 /// will be cloned using ComponentRegistration passed in new()
-pub struct SpawnCloneImpl<'a, 'b, 'c, 'd, S: BuildHasher> {
-    handler_set: &'a SpawnCloneImplHandlerSet,
+pub struct SpawnClone<'a, 'b, 'c, 'd, S: BuildHasher> {
+    handler_set: &'a SpawnCloneHandlerSet,
     components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
     resources: &'c Resources,
     entity_map: &'d HashMap<Entity, Entity, EntityHasher>,
 }
 
-impl<'a, 'b, 'c, 'd, S: BuildHasher> SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
+impl<'a, 'b, 'c, 'd, S: BuildHasher> SpawnClone<'a, 'b, 'c, 'd, S> {
     /// Creates a new implementation
     pub fn new(
-        handler_set: &'a SpawnCloneImplHandlerSet,
+        handler_set: &'a SpawnCloneHandlerSet,
         components: &'b HashMap<ComponentTypeId, ComponentRegistration, S>,
         resources: &'c Resources,
         entity_map: &'d HashMap<Entity, Entity, EntityHasher>,
@@ -287,7 +285,7 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher> SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
     }
 }
 
-impl<'a, 'b, 'c, 'd, S: BuildHasher> legion::world::Merger for SpawnCloneImpl<'a, 'b, 'c, 'd, S> {
+impl<'a, 'b, 'c, 'd, S: BuildHasher> legion::world::Merger for SpawnClone<'a, 'b, 'c, 'd, S> {
     fn prefers_new_archetype() -> bool {
         false
     }
@@ -366,9 +364,9 @@ impl<'a, 'b, 'c, 'd, S: BuildHasher> legion::world::Merger for SpawnCloneImpl<'a
     }
 }
 
-/// Used internally to dynamic dispatch into a Box<CloneMergeMappingImpl<T>>
-/// These are created as mappings are added to CloneMergeImpl
-trait SpawnCloneImplMapping: Send + Sync {
+/// Used internally to dynamic dispatch into a Box<SpawnCloneMapping>
+/// These are created as mappings are added to SpawnClone
+trait SpawnCloneMapping: Send + Sync {
     fn dst_type_id(&self) -> ComponentTypeId;
 
     fn register_dst_type(
@@ -387,7 +385,7 @@ trait SpawnCloneImplMapping: Send + Sync {
     );
 }
 
-struct SpawnCloneImplMappingImpl<F, IntoT>
+struct SpawnCloneMappingImpl<F, IntoT>
 where
     F: Fn(
         &Resources,           // resources
@@ -404,7 +402,7 @@ where
     phantom_data: PhantomData<IntoT>,
 }
 
-impl<F, IntoT> SpawnCloneImplMappingImpl<F, IntoT>
+impl<F, IntoT> SpawnCloneMappingImpl<F, IntoT>
 where
     F: Fn(
         &Resources,           // resources
@@ -419,7 +417,7 @@ where
         dst_type_id: ComponentTypeId,
         clone_fn: F,
     ) -> Self {
-        SpawnCloneImplMappingImpl {
+        SpawnCloneMappingImpl {
             dst_type_id,
             clone_fn,
             phantom_data: Default::default(),
@@ -427,7 +425,7 @@ where
     }
 }
 
-impl<F, IntoT> SpawnCloneImplMapping for SpawnCloneImplMappingImpl<F, IntoT>
+impl<F, IntoT> SpawnCloneMapping for SpawnCloneMappingImpl<F, IntoT>
 where
     F: Fn(
             &Resources,           // resources

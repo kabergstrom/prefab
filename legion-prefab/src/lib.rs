@@ -27,9 +27,9 @@ pub use cooking::cook_prefab;
 // Implements a safer, easier to use layer on top of legion's clone_from and clone_from_single by
 // using the type registry in legion-prefab
 mod clone_merge;
-pub use clone_merge::CopyCloneImpl;
-pub use clone_merge::SpawnCloneImpl;
-pub use clone_merge::SpawnCloneImplHandlerSet;
+pub use clone_merge::CopyClone;
+pub use clone_merge::SpawnClone;
+pub use clone_merge::SpawnCloneHandlerSet;
 pub use clone_merge::SpawnFrom;
 pub use clone_merge::SpawnInto;
 

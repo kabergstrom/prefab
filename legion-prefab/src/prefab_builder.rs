@@ -3,7 +3,7 @@ use prefab_format::{EntityUuid, ComponentTypeUuid, PrefabUuid};
 
 use std::collections::HashMap;
 use crate::{ComponentRegistration, DiffSingleResult, ComponentOverride, PrefabMeta, PrefabRef};
-use crate::{CookedPrefab, CopyCloneImpl, Prefab};
+use crate::{CookedPrefab, CopyClone, Prefab};
 use fnv::FnvHashMap;
 use std::hash::BuildHasher;
 
@@ -57,7 +57,7 @@ impl PrefabBuilder {
     pub fn new<S: BuildHasher>(
         prefab_uuid: PrefabUuid,
         prefab: CookedPrefab,
-        mut clone_impl: CopyCloneImpl<S>,
+        mut clone_impl: CopyClone<S>,
     ) -> Self {
         let mut before_world = World::default();
         let before_result_mappings =
@@ -100,7 +100,7 @@ impl PrefabBuilder {
     pub fn create_prefab<S: BuildHasher>(
         &mut self,
         registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
-        mut clone_impl: CopyCloneImpl<S>,
+        mut clone_impl: CopyClone<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = World::default();
         let mut new_prefab_entities = HashMap::new();

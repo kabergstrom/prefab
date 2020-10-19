@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use legion_prefab::{ComponentRegistration, DiffSingleResult};
 use crate::component_diffs::{ComponentDiff, EntityDiff, EntityDiffOp, WorldDiff};
-use legion_prefab::CopyCloneImpl;
+use legion_prefab::CopyClone;
 use std::hash::BuildHasher;
 
 struct TransactionBuilderEntityInfo {
@@ -38,7 +38,7 @@ impl TransactionBuilder {
     pub fn begin<S: BuildHasher>(
         self,
         src_world: &World,
-        mut clone_impl: CopyCloneImpl<S>,
+        mut clone_impl: CopyClone<S>,
     ) -> Transaction {
         let mut before_world = World::default();
         let mut after_world = World::default();

@@ -1,7 +1,7 @@
 use legion::*;
 use legion::storage::ComponentTypeId;
 use std::collections::HashMap;
-use crate::{CookedPrefab, Prefab, ComponentRegistration, CopyCloneImpl};
+use crate::{CookedPrefab, Prefab, ComponentRegistration, CopyClone};
 use prefab_format::{PrefabUuid, ComponentTypeUuid};
 use std::hash::BuildHasher;
 
@@ -22,7 +22,7 @@ pub fn cook_prefab<S: BuildHasher, T: BuildHasher, U: BuildHasher>(
     for prefab in prefab_lookup.values() {
         // Create the clone_merge impl. For prefab cooking, we will clone everything so we don't need to
         // set up any transformations
-        let mut clone_merge_impl = CopyCloneImpl::new(registered_components);
+        let mut clone_merge_impl = CopyClone::new(registered_components);
 
         // Clone all the entities from the prefab into the cooked world.
         let result_mappings =
