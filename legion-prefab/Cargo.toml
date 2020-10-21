@@ -1,20 +1,20 @@
 [package]
-name = "legion-prefab"
-version = "0.1.0"
 authors = ["Karl Bergström <karl.anton.bergstrom@gmail.com>"]
 edition = "2018"
+name = "legion-prefab"
+version = "0.1.0"
 
 [dependencies]
-prefab-format = { path = "../prefab-format" }
-serde = { version = "1", default-features = false, features = [ "derive" ] }
 erased-serde = "0.3"
-legion = { version = "0.3.0", default-features = false, features = ["serialize"] }
-inventory = "0.1"
-type-uuid = "0.1"
-uuid = { version = "0.8", default-features = false, features = [ "v4" ] }
-serde-diff = "0.3"
 fnv = "1.0"
+inventory = "0.1"
+legion = {version = "0.3.1", default-features = false, features = ["serialize"]}
 parking_lot = "0.11"
+prefab-format = {path = "../prefab-format"}
+serde = {version = "1", default-features = false, features = ["derive"]}
+serde-diff = "0.3"
+type-uuid = "0.1"
+uuid = {version = "0.8", default-features = false, features = ["v4"]}
 
 # This is required because ComponentOverride::data has a string that for now is encoded RON
 ron = "0.5"
