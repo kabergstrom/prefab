@@ -1,20 +1,20 @@
 [package]
-name = "prefab-format"
-version = "0.1.0"
 authors = ["Karl Bergström <karl.anton.bergstrom@gmail.com>"]
 edition = "2018"
+name = "prefab-format"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+serde = {version = "1.0", default-features = false, features = ["derive"]}
 serde-diff = "0.3"
 type-uuid = "0.1"
-serde = { version = "1.0", default-features = false, features = [ "derive" ] }
-uuid = { version = "0.8", features = [ "serde" ] }
+uuid = {version = "0.8", features = ["serde"]}
 
 [dev-dependencies]
-ron = "0.5"
-legion = { version = "0.3.0", default-features = false, features = ["serialize"] }
-linkme = "0.1"
+atelier-core = {git = "https://github.com/amethyst/atelier-assets", features = ["asset_uuid_macro"]}
 erased-serde = "0.3"
-atelier-core = { git = "https://github.com/amethyst/atelier-assets" }
+legion = {version = "0.3.1", default-features = false, features = ["serialize"]}
+linkme = "0.1"
+ron = "0.5"
