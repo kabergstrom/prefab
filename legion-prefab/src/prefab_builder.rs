@@ -97,9 +97,9 @@ impl PrefabBuilder {
         self.uuid_to_entities.get(&uuid).map(|x| x.after_entity())
     }
 
-    pub fn create_prefab<S: BuildHasher>(
+    pub fn create_prefab<S: BuildHasher, T: BuildHasher>(
         &mut self,
-        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration>,
+        registered_components: &HashMap<ComponentTypeUuid, ComponentRegistration, T>,
         mut clone_impl: CopyCloneImpl<S>,
     ) -> Result<Prefab, PrefabBuilderError> {
         let mut new_prefab_world = World::default();
