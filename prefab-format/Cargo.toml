@@ -17,4 +17,4 @@ atelier-core = {git = "https://github.com/amethyst/atelier-assets", features = [
 erased-serde = "0.3"
 legion = {version = "0.3.1", default-features = false, features = ["serialize"]}
 linkme = "0.1"
-ron = "0.5"
+ron = "0.6.4"

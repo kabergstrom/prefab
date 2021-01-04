@@ -1,7 +1,7 @@
 use legion::*;
 use prefab_format::{EntityUuid, ComponentTypeUuid, PrefabUuid};
 
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Cursor};
 use crate::{ComponentRegistration, DiffSingleResult, ComponentOverride, PrefabMeta, PrefabRef};
 use crate::{CookedPrefab, CopyCloneImpl, Prefab};
 use fnv::FnvHashMap;
@@ -134,7 +134,8 @@ impl PrefabBuilder {
             let mut component_overrides = vec![];
 
             for (component_type, registration) in registered_components {
-                let mut ron_ser = ron::ser::Serializer::new(None, true);
+                let mut buf = Cursor::new(Vec::new());
+                let mut ron_ser = ron::ser::Serializer::new(buf.get_mut(), None, true).unwrap();
                 let mut erased = erased_serde::Serializer::erase(&mut ron_ser);
 
                 let result = registration.diff_single(
@@ -151,9 +152,10 @@ impl PrefabBuilder {
                     }
                     DiffSingleResult::Change => {
                         // Store the change
+
                         component_overrides.push(ComponentOverride {
                             component_type: *component_type,
-                            data: ron_ser.into_output_string(),
+                            data: String::from_utf8(buf.into_inner()).expect("Ron should be utf-8"),
                         })
                     }
                     DiffSingleResult::Add => {
