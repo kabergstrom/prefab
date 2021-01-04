@@ -13,7 +13,7 @@ type-uuid = "0.1.2"
 uuid = { version = "0.8.1", features = ["serde"] }
 
 [dev-dependencies]
-atelier-core = { git = "https://github.com/amethyst/atelier-assets", features = ["asset_uuid_macro"] }
+atelier-core = { git = "https://github.com/radium-io/atelier-assets", rev = "a06899a048b6886fa7db93dbbd457fba2f8af0a3", features = ["asset_uuid_macro"] }
 erased-serde = "0.3.13"
 legion = { version = "0.3.1", default-features = false, features = ["serialize"] }
 linkme = "0.2.3"
