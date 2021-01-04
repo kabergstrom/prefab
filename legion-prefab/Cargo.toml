@@ -5,14 +5,14 @@ name = "legion-prefab"
 version = "0.1.0"
 
 [dependencies]
-erased-serde = "0.3"
-fnv = "1.0"
-inventory = "0.1"
+erased-serde = "0.3.13"
+fnv = "1.0.7"
+inventory = "0.1.10"
 legion = { version = "0.3.1", default-features = false, features = ["serialize"] }
-parking_lot = "0.11"
+parking_lot = "0.11.1"
 prefab-format = { path = "../prefab-format" }
-serde = { version = "1", default-features = false, features = ["derive"] }
+serde = { version = "1.0.118", default-features = false, features = ["derive"] }
 serde-diff = "0.4.0"
-type-uuid = "0.1"
-uuid = { version = "0.8", default-features = false, features = ["v4"] }
+type-uuid = "0.1.2"
+uuid = { version = "0.8.1", default-features = false, features = ["v4"] }
 ron = "0.6.4"
