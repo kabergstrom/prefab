@@ -12,7 +12,7 @@ legion = {version = "0.3.1", default-features = false, features = ["serialize"]}
 parking_lot = "0.11"
 prefab-format = {path = "../prefab-format"}
 serde = {version = "1", default-features = false, features = ["derive"]}
-serde-diff = "0.3"
+serde-diff = "0.4.0"
 type-uuid = "0.1"
 uuid = {version = "0.8", default-features = false, features = ["v4"]}
 
