@@ -1,6 +1,2 @@
 [workspace]
-members = [
-    "legion-prefab",
-    "legion-transaction",
-    "prefab-format",
-]
+members = ["legion-prefab", "legion-transaction", "prefab-format"]
