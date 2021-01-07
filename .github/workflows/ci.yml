@@ -4,20 +4,25 @@ on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "-C debuginfo=0 -D warnings"
+
 
 jobs:
   build:
     strategy:
       matrix:
         toolchain: [stable, nightly]
-        os: [windows-2019, ubuntu-20.04, macos-10.15]
-        exclude:
-          - os: macos-10.15
-            toolchain: nightly
-          - os: windows-2019
-            toolchain: nightly
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        checks:
+          - advisories
+          - bans licenses sources
+          
+    # Prevent sudden announcement of a new advisory from failing ci:
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
+
     runs-on: ${{ matrix.os }}
-    needs: clean
+    needs: [clean, deny-check]
     steps:
       - uses: actions/checkout@v2
 
@@ -26,25 +31,22 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           override: true
 
-      - uses: actions/cache@v2
-        with:
-          path: |
-            target
-          key: ${{ runner.os }}-cargo-check-test-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Build
-        run: cargo check
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: "-C debuginfo=0 -D warnings"
+        run: cargo check --workspace --all-features
 
-#      TODO: this is not passing
-#      - name: Run tests
-#        run: cargo test --workspace
-#        if: ${{ runner.os == 'Linux' }}
-#        env:
-#          CARGO_INCREMENTAL: 0
-#          RUSTFLAGS: "-C debuginfo=0 -D warnings"
+      - name: Run tests
+        run: cargo test --workspace --all-features
+        if: ${{ runner.os == 'Linux' }}
+
+
+  deny-check:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check ${{ matrix.checks }}
 
   clean:
     runs-on: ubuntu-latest
@@ -58,20 +60,9 @@ jobs:
           override: true
 
       - name: Check the format
-        run: cargo fmt --all -- --check
+        run: cargo +stable fmt --all -- --check
 
-      - name: Run clippy
-        run: >
-          cargo clippy
-          --all-features
-          --
-          -D warnings
-
-#      TODO: --all-targets does not pass
-#      - name: Run clippy
-#        run: >
-#          cargo clippy
-#          --all-targets
-#          --all-features
-#          --
-#          -D warnings
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features -- -D warnings
